@@ -40,22 +40,16 @@ def get_tickers():
     return tickers
 
 
-
-
-
-
-def loop():
+def pull_data():
     stocks = create_stocks_dict()
+
     for ticker in stocks.keys():
         try:
-            create_task(stocks[ticker].get_data())
+            stocks[ticker].get_data()
         except pandas_datareader._utils.RemoteDataError:
             print('Error here')
             stocks[ticker].set_data(new_dataframe=None)
-
-def pull_data():
-    
-    print(stocks[list(stocks.keys())[0]].data)
+    #print(stocks[list(stocks.keys())[0]].data)
     return stocks
 
 
