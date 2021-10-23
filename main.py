@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas_datareader._utils
 from pandas_datareader import data as wb
-import asyncio
+
 
 class Stock:
     def __init__(self,name):
@@ -15,7 +15,7 @@ class Stock:
         self.analysis_period = 100
         self.data = pd.DataFrame
 
-    async def get_data(self, date = datetime.date.today()):
+    def get_data(self, date = datetime.date.today()):
         start_date = date - datetime.timedelta(days=self.analysis_period)
         self.data = wb.DataReader(f"{self.name}", "yahoo", start_date, date)
 
@@ -44,39 +44,30 @@ def get_tickers():
 
 
 
-async def loop():
+def loop():
     stocks = create_stocks_dict()
     for ticker in stocks.keys():
         try:
-            asyncio.create_task(stocks[ticker].get_data())
+            create_task(stocks[ticker].get_data())
         except pandas_datareader._utils.RemoteDataError:
             print('Error here')
             stocks[ticker].set_data(new_dataframe=None)
 
-async def pull_data():
-
-
-
+def pull_data():
+    
     print(stocks[list(stocks.keys())[0]].data)
     return stocks
 
 
-async def main():
-    stocks = await pull_data()
+def main():
+    stocks = pull_data()
     stocks_keylist = list(stocks.keys())
     print(stocks[stocks_keylist[0]].data)
     print(stocks)
 
 
-
-
-
-
-
-
-
 if __name__ == '__main__':
     start = time.time()
-    asyncio.run(main())
+    main()
     print('RUN 20 tickers')
     print(time.time()-start)
