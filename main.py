@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas_datareader._utils
 from pandas_datareader import data as wb
+import concurrent.futures
 
 
 class Stock:
@@ -15,13 +16,13 @@ class Stock:
         self.analysis_period = 100
         self.data = pd.DataFrame
 
-    def get_data(self, date = datetime.date.today()):
-        start_date = date - datetime.timedelta(days=self.analysis_period)
-        self.data = wb.DataReader(f"{self.name}", "yahoo", start_date, date)
-
     def set_data(self, new_dataframe):
         self.data = new_dataframe
 
+
+def get_data(dict,key, date = datetime.date.today()):
+    start_date = date - datetime.timedelta(days=dict[key].analysis_period)
+    dict[key].set_data(wb.DataReader(f"{dict[key].name}", "yahoo", start_date, date))
 
 def create_stocks_dict():
     stocks = {}
@@ -40,24 +41,24 @@ def get_tickers():
     return tickers
 
 
+
 def pull_data():
     stocks = create_stocks_dict()
 
-    for ticker in stocks.keys():
-        try:
-            stocks[ticker].get_data()
-        except pandas_datareader._utils.RemoteDataError:
-            print('Error here')
-            stocks[ticker].set_data(new_dataframe=None)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(get_data, dict=stocks, key=ticker) for ticker in stocks.keys()]
+        for item in concurrent.futures.wait(futures):
+            print('ended')
     #print(stocks[list(stocks.keys())[0]].data)
     return stocks
+
 
 
 def main():
     stocks = pull_data()
     stocks_keylist = list(stocks.keys())
-    print(stocks[stocks_keylist[0]].data)
-    print(stocks)
+    for i in range(len(stocks.keys())):
+        print(stocks[stocks_keylist[i]].data)
 
 
 if __name__ == '__main__':
