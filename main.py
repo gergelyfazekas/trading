@@ -20,9 +20,13 @@ class Stock:
         self.name = name
         self.analysis_period = ANALYSIS_PERIOD
         self.data = pd.DataFrame
+        self.sma_cross = False
 
     def set_data(self, new_dataframe):
         self.data = new_dataframe
+
+    def set_sma_cross(self):
+        self.sma_cross = True
 
 
 def get_data(dict,key, date = datetime.date.today()):
