@@ -23,6 +23,9 @@ def sma_cross(stock, sma_short_days, sma_long_days, max_days_since_cross):
         if np.argmax(crosses.reverse()) <= max_days_since_cross:
             stock.set_sma_cross()
 
+        else:
+            print('Not finished this part yet')
+
     else:
         sma_calc(stock=stock, period=sma_short_days)
 
