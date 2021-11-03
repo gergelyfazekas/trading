@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas_datareader._utils
 from pandas_datareader import data as wb
 import concurrent.futures
-
+from tech_ind import sma_cross, sma_calc, rsi
 
 ANALYSIS_PERIOD = 20
 NUMBER_OF_TICKERS = 20
@@ -69,6 +69,11 @@ def pop_keys(dict, keys_to_pop):
     for key in keys_to_pop:
         dict.pop(key)
     return dict
+
+
+def run_strategy(strategy_dict):
+    for indicator_param_tuple in strategy_dict.items():
+        indicator_param_tuple[0](*indicator_param_tuple[1])
 
 
 def main():
