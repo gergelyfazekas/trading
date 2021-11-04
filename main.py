@@ -80,8 +80,10 @@ def main():
     stocks = pull_data()
     stocks_keylist = list(stocks.keys())
 
-    # for i in range(len(stocks.keys())):
-    #     print(stocks[stocks_keylist[i]].data)
+    for ticker in stocks_keylist:
+        strategy = {rsi: [stocks[ticker], 14],
+                     sma_cross: [stocks[ticker], 14, 28, 5]}
+        run_strategy(strategy)
 
 
 if __name__ == '__main__':
