@@ -72,8 +72,8 @@ def pop_keys(dict, keys_to_pop):
 
 
 def run_strategy(strategy_dict):
-    for indicator_param_tuple in strategy_dict.items():
-        indicator_param_tuple[0](*indicator_param_tuple[1])
+    for item in strategy_dict.items():
+        item[0](*item[1])
 
 
 def main():
