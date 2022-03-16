@@ -37,20 +37,43 @@ def sql_disconnect(cursor, db):
 	cursor.close()
 	db.close()
 
+#Get stock prices data for tickers and insert it into the sql database 
+#format of start and end: "2006-01-01"
+def get_data_list(ticker, start_date, end_date):
+	stock_price = wb.DataReader(f"{ticker}", "yahoo", start = start_date, end = end_date)
+	stock_price["Date"] = stock_price.index.strftime('%Y-%m-%d %X')
+	stock_price_list = stock_price.values.tolist()
+	return stock_price_list
+
+
+
+def insert_data_into_sql(ticker, list):
+	mycursor, db = sql_connect()
+
+	for x in range(len(list)): 
+		tuple_values = tuple(list[x])
+		mycursor.execute("INSERT INTO stock_prices (ticker, high, low, open, close, volume, adj_close, date_) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (f"{ticker}",) + tuple_values)
+
+	db.commit()
+
+	mycursor.execute("SELECT * FROM stock_prices")
+
+	for x in mycursor:
+		print(x)
+
+	sql_disconnect(mycursor,db)
 
 
 
 
 
 
-# fb = yf.Ticker("FB")
+# ticker_data = get_data_list("AAPL", "2006-01-06", "2006-01-10")
 
-# fb_info = fb.info
-
-# print(fb_info)
+# insert_data_into_sql("AAPL", ticker_data)
 
 
-#Creating stock_prices table
+
 
 
 
