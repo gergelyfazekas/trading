@@ -3,7 +3,7 @@ import numpy as np
 
 
 def sma_calc(stock, period=14):
-    stock.data[f'sma_{period}'] = stock.data.Close.rolling(window=period).mean()
+    stock.data[f'sma_{period}'] = stock.data['Close'].rolling(window=period).mean()
     # return sma
 
 
