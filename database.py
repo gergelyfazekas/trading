@@ -22,8 +22,8 @@ def sql_disconnect(cursor, db):
 
 def insert_data_into_sql(ticker_name, ticker_df):
 	if not isinstance(ticker_df, pd.DataFrame):
-		print('ticker_df: not pandas.dataframe')
-		return False
+		raise TypeError('ticker_df: not pandas.dataframe')
+		# return False
 
 	mycursor, db = sql_connect()
 	data_to_list = ticker_df.values.tolist()
