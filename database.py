@@ -27,8 +27,7 @@ def insert_data_into_sql(ticker_df, mycursor, db):
 		raise TypeError('ticker_df: not pandas.dataframe')
 		# return False
 
-	if not db.is_connected():
-		mycursor, db = sql_connect()
+	check_connection(mycursor,db)
 
 	data_to_list = ticker_df.values.tolist()
 	for x in range(len(data_to_list)):
@@ -42,20 +41,11 @@ def insert_data_into_sql(ticker_df, mycursor, db):
 
 
 def price_query_sql(ticker_name, mycursor, db, start_date=datetime.date(1990,1,1), end_date=datetime.date.today(), sql_table="stock_prices"):
-	if not db.is_connected():
-		mycursor, db = sql_connect()
-
 	start_date = str(start_date)
 	end_date = str(end_date)
 	sql_table = str(sql_table)
-	# start_date = start_date.strftime('%Y-%m-%d %X')
-	# end_date = end_date.strftime('%Y-%m-%d %X')
 
-
-	# try:
-	# 	mycursor.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA WHERE TABLE_NAME = {sql_table}")
-	# 	database_columns = [x[0] for x in mycursor.fetchall()]
-	# except:
+	check_connection(mycursor,db)
 	mycursor.execute(f"SHOW COLUMNS FROM {sql_table}")
 	database_columns = [x[0] for x in mycursor.fetchall()]
 
@@ -68,26 +58,36 @@ def price_query_sql(ticker_name, mycursor, db, start_date=datetime.date(1990,1,1
 	return ticker_df
 
 
-def main():
-	mycursor, db = sql_connect()
+def check_connection(mycursor, db):
+	if not db.is_connected():
+		mycursor, db = sql_connect()
+
+
+def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = None, end_date = None):
+	check_connection(mycursor,db)
+
+	if start_date is None:
+		mycursor.execute("SELECT date_ FROM stock_prices ORDER BY id DESC LIMIT 1")
+		last_date = mycursor.fetchall()
+		start_date = last_date[0][0].date() + datetime.timedelta(days = 1)
+
+	if end_date is None:
+		end_date = start_date + datetime.timedelta(days = length)
+
+	stock_class.Stock.yahoo_pull_start_date = start_date
+	stock_class.Stock.yahoo_pull_end_date = end_date
+
 	stock_class.Stock.create_stock_list_from_csv()
+
 	futures = stock_class.Stock.yahoo_pull_data_for_stock_list()
 	for futures_item in futures:
-		insert_data_into_sql(futures_item.result(), db, mycursor)
+		insert_data_into_sql(futures_item.result(), mycursor, db)
 
-    # if 'database' in sys.modules:
-    #     print('Import successful')
-    # else:
-    #     print('Import not successful')
+
+def main():
+	mycursor, db = sql_connect()
+	fill_sql_from_yahoo(mycursor,db)
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-# ticker_data = get_data_list("AAPL", "2006-01-06", "2006-01-10")
-# insert_data_into_sql("AAPL", ticker_data)

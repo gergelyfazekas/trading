@@ -29,6 +29,7 @@ class Stock:
     def create_stock_list_from_csv(cls, filename="tickers_30.csv"):
         excel_data = pd.read_csv(open(filename, encoding="latin-1"))
         tickers = excel_data['Symbol'].copy()
+        tickers = tickers.values.tolist()
         for ticker in tickers:
             Stock(name=ticker)
 
