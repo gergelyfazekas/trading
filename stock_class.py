@@ -7,7 +7,7 @@ import sys
 
 # Constants
 MAX_WORKERS = 20
-ANALYSIS_PERIOD = 20
+CALCULATION_PERIOD = 20
 
 
 class Stock:
@@ -30,7 +30,7 @@ class Stock:
         excel_data = pd.read_csv(open(filename, encoding="latin-1"))
         tickers = excel_data['Symbol'].copy()
         for ticker in tickers:
-            cls.stock_list.append(Stock(name=ticker))
+            Stock(name=ticker)
 
     @classmethod
     def print_stock_names(cls):
@@ -69,7 +69,7 @@ class Stock:
     def __init__(self, name):
         self.name = name
         self.__class__.stock_list.append(self)
-        self.analysis_period = ANALYSIS_PERIOD
+        self.calculation_period = CALCULATION_PERIOD
         self.data = pd.DataFrame
         self.sma_cross = False
 
@@ -94,6 +94,10 @@ class Stock:
     def set_yahoo_pull_end_date(self):
         # There might not be a need for specific date settings for different tickers
         pass
+
+    def sma_calc(self, period=14):
+        self.data[f'sma_{period}'] = self.data['Close'].rolling(window=CALCULATION_PERIOD).mean()
+
 
     def set_sma_cross(self):
         self.sma_cross = True
