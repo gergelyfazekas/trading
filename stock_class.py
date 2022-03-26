@@ -97,7 +97,7 @@ class Stock:
     def sma_calc(self, period=CALCULATION_PERIOD):
         self.data[f'sma_{period}'] = self.data['Close'].rolling(window=period).mean()
 
-    def sma_cross(self, sma_short_days, sma_long_days, max_days_since_cross):
+    def sma_cross(self, sma_short_days, sma_long_days):
         if not f'sma_{sma_long_days}' in self.data.columns:
             self.sma_calc(period=sma_long_days)
         if not f'sma_{sma_short_days}' in self.data.columns:
