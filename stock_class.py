@@ -2,6 +2,7 @@ import concurrent.futures
 import datetime
 from pandas_datareader import data as wb
 import pandas as pd
+import numpy as np
 import database
 import sys
 
@@ -88,24 +89,35 @@ class Stock:
             raise TypeError('new_dataframe: not pandas.dataframe')
         self.data = new_dataframe
 
-    def set_yahoo_pull_start_date(self):
-        # There might not be a need for specific date settings for different tickers
-        pass
+    def set_yahoo_pull_start_date(self, new_date):
+        self.yahoo_pull_start_date = new_date
 
-    def set_yahoo_pull_end_date(self):
-        # There might not be a need for specific date settings for different tickers
-        pass
+    def set_yahoo_pull_end_date(self, new_date):
+        self.yahoo_pull_end_date = new_date
 
-    def sma_calc(self, period=14):
-        self.data[f'sma_{period}'] = self.data['Close'].rolling(window=CALCULATION_PERIOD).mean()
+    def sma_calc(self, period=CALCULATION_PERIOD):
+        self.data[f'sma_{period}'] = self.data['Close'].rolling(window=period).mean()
 
+    def sma_cross(self, sma_short_days, sma_long_days, max_days_since_cross):
+        if not f'sma_{sma_long_days}' in self.data.columns:
+            self.sma_calc(period=sma_long_days)
+        if not f'sma_{sma_short_days}' in self.data.columns:
+            self.sma_calc(period=sma_short_days)
 
-    def set_sma_cross(self):
-        self.sma_cross = True
+        below_or_above = np.where(self.data[f'sma_{sma_short_days}'] < self.data[f'sma_{sma_long_days}'], 0,
+                                  np.where(self.data[f'sma_{sma_short_days}'] > self.data[f'sma_{sma_long_days}'], 1,
+                                           np.nan))
 
+        crosses = [0]
+        for i in range(len(below_or_above) - 1):
+            crosses.append(below_or_above[i + 1] - below_or_above[i])
 
+        self.data[f'sma_cross_{sma_short_days}_{sma_long_days}'] = crosses
 
-
-
-
-
+    def rsi(self, lookback):
+        values = self.data['Close'].iloc[-lookback:]
+        diffs = [values[x+1]-values[x] for x in range(len(values)-1)]
+        ups = diffs[diffs > 0].mean()
+        downs = -1 * diffs[diffs < 0].mean()
+        # print('rsi', self.name, 100 * up / (up + down))
+        self.data[f'rsi_{lookback}'] = 100 * ups / (ups + downs)
