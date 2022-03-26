@@ -114,9 +114,14 @@ class Stock:
         self.data[f'sma_cross_{sma_short_days}_{sma_long_days}'] = crosses
 
     def rsi(self, lookback):
-        values = self.data['Close'].iloc[-lookback:]
-        diffs = [values[x+1]-values[x] for x in range(len(values)-1)]
-        ups = diffs[diffs > 0].mean()
-        downs = -1 * diffs[diffs < 0].mean()
-        # print('rsi', self.name, 100 * up / (up + down))
-        self.data[f'rsi_{lookback}'] = 100 * ups / (ups + downs)
+        # values = self.data['Close'].iloc[-lookback:]
+        # diffs = [values[x+1]-values[x] for x in range(len(values)-1)]
+        # diffs = pd.Series(diffs)
+
+        diffs = self.data['Close'].diff()
+        ups = diffs.where(diffs > 0, 0)
+        downs = -1 * diffs.where(diffs < 0, 0)
+        up_sma = ups.rolling(window=lookback).mean()
+        down_sma = downs.rolling(window=lookback).mean()
+        rs_factor = up_sma/down_sma
+        self.data[f'rsi_{lookback}'] = 100 - (100/(1+rs_factor))
