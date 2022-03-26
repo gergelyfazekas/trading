@@ -73,7 +73,6 @@ class Stock:
         self.__class__.stock_list.append(self)
         self.calculation_period = CALCULATION_PERIOD
         self.data = pd.DataFrame
-        self.sma_cross = False
 
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
@@ -86,7 +85,7 @@ class Stock:
     def set_data(self, new_dataframe):
         if not isinstance(new_dataframe, pd.DataFrame):
             print(new_dataframe)
-            raise TypeError('new_dataframe: not pandas.dataframe')
+            raise TypeError('new_dataframe: not pandas.datafram e')
         self.data = new_dataframe
 
     def set_yahoo_pull_start_date(self, new_date):
