@@ -14,8 +14,28 @@ CALCULATION_PERIOD = 20
 class Stock:
     # stock_list contains Stock instances not just names
     stock_list = []
-    yahoo_pull_start_date = datetime.date(2007,1,9)
-    yahoo_pull_end_date = datetime.date(2007,1,10)
+    yahoo_pull_start_date = datetime.date(2007, 1, 9)
+    yahoo_pull_end_date = datetime.date(2007, 1, 10)
+
+    def __init__(self, name):
+        self.name = name
+        self.__class__.stock_list.append(self)
+        self.calculation_period = CALCULATION_PERIOD
+        self.data = pd.DataFrame
+    
+    def __str__(self):
+        return f"Stock:" \
+               f"Name: {self.name}"
+
+    def __repr__(self):
+        return f"Stock(name={self.name})"
+
+    def __eq__(self, other):
+        if self.name == other.name and len(self.data.index) == len(other.data.index) and np.all(
+                self.data.index == other.data.index):
+            return True
+        else:
+            return False
 
     @staticmethod
     def create_top_tickers_csv(filename="nasdaq_tickers.csv", number=30, sort_by="Market Cap", asc=False):
@@ -57,22 +77,9 @@ class Stock:
 
         return futures
 
-            # print(type(futures[1].result()))
-            # no_data_tickers = [item.name for item in cls.stock_list if
-            #                    item.data.empty]
-
-            # cls.pop_no_data_tickers()
-            # print("No data found (and removed from dict): ", no_data_tickers)
-
     @classmethod
     def pop_no_data_tickers(cls):
         cls.stock_list = [item for item in cls.stock_list if not item.data.empty]
-
-    def __init__(self, name):
-        self.name = name
-        self.__class__.stock_list.append(self)
-        self.calculation_period = CALCULATION_PERIOD
-        self.data = pd.DataFrame
 
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
@@ -123,5 +130,5 @@ class Stock:
         downs = -1 * diffs.where(diffs < 0, 0)
         up_sma = ups.rolling(window=lookback).mean()
         down_sma = downs.rolling(window=lookback).mean()
-        rs_factor = up_sma/down_sma
-        self.data[f'rsi_{lookback}'] = 100 - (100/(1+rs_factor))
+        rs_factor = up_sma / down_sma
+        self.data[f'rsi_{lookback}'] = 100 - (100 / (1 + rs_factor))
