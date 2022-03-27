@@ -22,7 +22,7 @@ class Stock:
         self.__class__.stock_list.append(self)
         self.calculation_period = CALCULATION_PERIOD
         self.data = pd.DataFrame
-    
+
     def __str__(self):
         return f"Stock:" \
                f"Name: {self.name}"
