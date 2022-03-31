@@ -9,6 +9,7 @@ import sys
 # Constants
 MAX_WORKERS = 20
 CALCULATION_PERIOD = 20
+LOOK_AHEAD_RANGE = 31
 
 
 class Stock:
@@ -100,6 +101,30 @@ class Stock:
 
     def set_yahoo_pull_end_date(self, new_date):
         self.yahoo_pull_end_date = new_date
+
+    def labeling_function(self):
+        look_ahead_range = LOOK_AHEAD_RANGE
+        label = []
+        for close_idx in range(len(self.data['Close'])):
+            relative_profit = []
+            for look in range(len(look_ahead_range)):
+                # This will raise IndexError when overloading - Need to fix this later
+                relative_profit.append(self.data['Close'][close_idx + look] / self.data['Close'][close_idx])
+
+            label.append(max(relative_profit) - (2 * min(relative_profit)))
+
+        if len(label) < len(self.data['Close']):
+            diff_length = len(self.data['Close'])-len(label)
+            tmp_array = np.empty(diff_length)
+            tmp_array[:] = np.nan
+            label.append(list(tmp_array))
+            
+        self.data['label'] = label
+
+        # Other approach:
+        # maxima = self.data['Close'][::-1].rolling(window=look_ahead_range).max()[::-1]
+        # minima = self.data['Close'][::-1].rolling(window=look_ahead_range).min()[::-1]
+        # self.data['label'] = maxima - (2 * minima)
 
     def sma_calc(self, period=CALCULATION_PERIOD):
         self.data[f'sma_{period}'] = self.data['Close'].rolling(window=period).mean()
