@@ -1,0 +1,129 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage[table]  {xcolor}
+\usepackage{graphicx}
+\usepackage {tabularx}
+\usepackage{amsfonts}
+\usepackage[paper=a4paper,left=25mm,right=25mm,top=20mm,bottom=30mm]{geometry}
+\usepackage{amssymb}
+\usepackage{blindtext}   % Für Beispieltexte
+\usepackage{enumitem}
+
+\numberwithin{equation}{section}
+
+\begin{document}
+
+\begin{titlepage}
+\begin{figure}[!htp]
+     \hspace*{-1.1cm}
+ \begin{minipage}[r][0.22\paperwidth][l]{0.2\paperwidth}
+\includegraphics[scale = 0.25,angle=90]{TULogo.pdf}    % Das Logo ist natürlich optional
+\end{minipage} \hspace{21cm}
+   \end{figure}
+
+
+\thispagestyle{empty}
+  \sffamily
+
+\begin{center}
+   \begin{Huge}
+   \textbf{Case Studies} \\
+   \end{Huge}
+   \begin{large}
+  Summer 2022\\
+\end{large}
+
+   \vspace{3cm}
+
+\begin{large}
+Project I\\
+Topic
+\end{large}\\
+\color{black}
+  \vspace{1cm}
+\begin{large}
+ Author\\
+ \today                    
+ \end{large}
+
+   \vspace{3cm}
+\begin{large}
+   in collaboration with X, Y, Z\\
+	\vspace{1,5cm}
+   Lecturers: Prof. Dr. Z, M.Sc. X\\
+	M.Sc. Y 
+\end{large}
+
+  \end{center}
+ \end{titlepage}
+
+\newpage
+
+\tableofcontents
+\thispagestyle{empty}
+
+\newpage
+\setcounter{page}{1}
+\section{Introduction}
+\renewcommand{\baselinestretch}{1.5}\normalsize 
+
+\blindtext
+
+
+\section{Data}
+
+
+\section{Methods}
+
+
+\begin{align}
+	f(x) = x^2
+\end{align}
+
+\section{Results}
+
+Figure~\ref{fig:logo}.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[scale=0.25, angle=90]{TULogo.pdf}
+\caption{TU-Logo}
+\label{fig:logo}
+\end{figure}
+
+
+\section{Conclusion}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{itemize}[itemindent=-0.7cm, label=]
+\item R Core Team (2013). R: A language and environment for statistical
+  computing. R Foundation for Statistical Computing, Vienna, Austria.
+  http://www.R-project.org/.
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section*{Appendix}
+\addcontentsline{toc}{section}{Appendix}
+
+\setcounter{equation}{0}
+\renewcommand\theequation{\Alph{section}.\arabic{equation}}	
+\setcounter{table}{0}
+\renewcommand\thetable{\Alph{section}.\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand\thefigure{\Alph{section}.\arabic{figure}}
+
+
+
+
+\end{document}
