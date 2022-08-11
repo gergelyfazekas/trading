@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import database
 import sys
+import matplotlib.pyplot as plt
 
 # Constants
 MAX_WORKERS = 20
@@ -16,7 +17,7 @@ class Stock:
     # stock_list contains Stock instances not just names
     stock_list = []
     yahoo_pull_start_date = datetime.date(2007, 1, 9)
-    yahoo_pull_end_date = datetime.date(2007, 1, 10)
+    yahoo_pull_end_date = datetime.date(2007, 1, 19)
 
     def __init__(self, name):
         self.name = name
@@ -93,7 +94,7 @@ class Stock:
     def set_data(self, new_dataframe):
         if not isinstance(new_dataframe, pd.DataFrame):
             print(new_dataframe)
-            raise TypeError('new_dataframe: not pandas.datafram e')
+            raise TypeError('new_dataframe: not pandas.dataframe')
         self.data = new_dataframe
 
     def set_yahoo_pull_start_date(self, new_date):
@@ -118,7 +119,7 @@ class Stock:
             tmp_array = np.empty(diff_length)
             tmp_array[:] = np.nan
             label.append(list(tmp_array))
-            
+
         self.data['label'] = label
 
         # Other approach:
@@ -157,3 +158,10 @@ class Stock:
         down_sma = downs.rolling(window=lookback).mean()
         rs_factor = up_sma / down_sma
         self.data[f'rsi_{lookback}'] = 100 - (100 / (1 + rs_factor))
+
+
+    def show(self, from_date = self.data['Date'][0], to_date = self.data['Date'][-1]):
+        chunk = self.data.loc[from_date : to_date]
+        plt.plot(chunk['Close'])
+        plt.show()
+
