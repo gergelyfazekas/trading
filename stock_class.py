@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 
 # Constants
 MAX_WORKERS = 20
-CALCULATION_PERIOD = 20
 LOOK_AHEAD_RANGE = 31
+PLACEHOLDER = 10
 
 
 class Stock:
@@ -20,14 +20,35 @@ class Stock:
     yahoo_pull_end_date = datetime.date(2007, 1, 19)
 
     def __init__(self, name):
+        # stock related attributes
         self.name = name
-        self.__class__.stock_list.append(self)
-        self.calculation_period = CALCULATION_PERIOD
         self.data = pd.DataFrame
 
+        # portfolio related attributes
+        self.log = pd.DataFrame({'date':[np.nan]*PLACEHOLDER,
+                                  'amount': [np.nan]*PLACEHOLDER,
+                                  'price': [np.nan]*PLACEHOLDER,
+                                  'value': [np.nan]*PLACEHOLDER})
+        self.buy_log = pd.DataFrame({'date':[np.nan]*PLACEHOLDER,
+                                  'amount': [np.nan]*PLACEHOLDER,
+                                  'price': [np.nan]*PLACEHOLDER,
+                                  'value': [np.nan]*PLACEHOLDER})
+        self.sell_log = pd.DataFrame({'date':[np.nan]*PLACEHOLDER,
+                                  'amount': [np.nan]*PLACEHOLDER,
+                                  'price': [np.nan]*PLACEHOLDER,
+                                  'value': [np.nan]*PLACEHOLDER})
+        self.current_amount = float
+        self.current_value = float
+
+        # prevent multiple initialization
+        names = Stock.get_stock_names()
+        if self.name not in names:
+            self.__class__.stock_list.append(self)
+
+
     def __str__(self):
-        return f"Stock:" \
-               f"Name: {self.name}"
+        print("Stock:")
+        print(f"Name: {self.name}")
 
     def __repr__(self):
         return f"Stock(name={self.name})"
@@ -71,6 +92,10 @@ class Stock:
         return ticker_lst
 
     @classmethod
+    def clear_stock_list(cls):
+        cls.stock_list = []
+
+    @classmethod
     def yahoo_pull_data_for_stock_list(cls):
         if len(cls.stock_list) > 0:
             with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -81,7 +106,17 @@ class Stock:
 
     @classmethod
     def pop_no_data_tickers(cls):
+        drop = [name for name in Stock.get_stock_names() if Stock.fetch_stock(name).data.empty]
         cls.stock_list = [item for item in cls.stock_list if not item.data.empty]
+        print(f"No data available: {drop}")
+
+    @classmethod
+    def fetch_stock(cls, name):
+        for stock in cls.stock_list:
+            if stock.name == name:
+                return stock
+        raise ValueError(f'stock_list does not contain {name}')
+
 
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
@@ -103,16 +138,29 @@ class Stock:
     def set_yahoo_pull_end_date(self, new_date):
         self.yahoo_pull_end_date = new_date
 
-    def labeling_function(self):
+    def labeling_function(self, method = 'minmax'):
         look_ahead_range = LOOK_AHEAD_RANGE
         label = []
-        for close_idx in range(len(self.data['Close'])):
-            relative_profit = []
-            for look in range(len(look_ahead_range)):
-                # This will raise IndexError when overloading - Need to fix this later
-                relative_profit.append(self.data['Close'][close_idx + look] / self.data['Close'][close_idx])
 
-            label.append(max(relative_profit) - (2 * min(relative_profit)))
+        if method not in ['minmax', 'max', 'avg']:
+            raise ValueError("Choose a correct method: 'minmax', 'max', 'avg'")
+
+        for close_idx in range(len(self.data['Close'])):
+            relative_profits = \
+                self.data['Close'].iloc[(close_idx+1) : close_idx + look_ahead_range]/self.data['Close'].iloc[close_idx]
+
+            if method == 'minmax':
+                if not len(relative_profits) == 0:
+                    label.append(max(relative_profits) - (2 * min(relative_profits)))
+                else:
+                    label.append(np.nan)
+            elif method == 'max':
+                if not len(relative_profits) == 0:
+                    label.append(max(relative_profits))
+                else:
+                    label.append(np.nan)
+            elif method == 'avg':
+                label.append(relative_profits.mean())
 
         if len(label) < len(self.data['Close']):
             diff_length = len(self.data['Close'])-len(label)
@@ -120,14 +168,14 @@ class Stock:
             tmp_array[:] = np.nan
             label.append(list(tmp_array))
 
-        self.data['label'] = label
+        self.data[f'label_{method}'] = label
 
         # Other approach:
         # maxima = self.data['Close'][::-1].rolling(window=look_ahead_range).max()[::-1]
         # minima = self.data['Close'][::-1].rolling(window=look_ahead_range).min()[::-1]
         # self.data['label'] = maxima - (2 * minima)
 
-    def sma_calc(self, period=CALCULATION_PERIOD):
+    def sma_calc(self, period=20):
         self.data[f'sma_{period}'] = self.data['Close'].rolling(window=period).mean()
 
     def sma_cross(self, sma_short_days, sma_long_days):
@@ -159,9 +207,24 @@ class Stock:
         rs_factor = up_sma / down_sma
         self.data[f'rsi_{lookback}'] = 100 - (100 / (1 + rs_factor))
 
-
-    def show(self, from_date = self.data['Date'][0], to_date = self.data['Date'][-1]):
+    def show(self, from_date = datetime.date(2000,1,1), to_date = datetime.date.today()):
+        from_date = datetime.date(from_date)
+        to_date = datetime.date(to_date)
         chunk = self.data.loc[from_date : to_date]
         plt.plot(chunk['Close'])
         plt.show()
+
+    def get_price(self, date):
+        try:
+            return self.data['Close'].loc[str(date)]
+        except TypeError:
+            print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
+
+
+
+
+
+
+
+
 
