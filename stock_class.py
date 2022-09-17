@@ -23,7 +23,7 @@ class Stock:
         # stock related attributes
         self.name = name
         self.data = pd.DataFrame
-
+        self.sector = str
         # portfolio related attributes
         self.log = pd.DataFrame({'date':[np.nan]*PLACEHOLDER,
                                   'amount': [np.nan]*PLACEHOLDER,
@@ -131,6 +131,10 @@ class Stock:
             print(new_dataframe)
             raise TypeError('new_dataframe: not pandas.dataframe')
         self.data = new_dataframe
+
+    def set_sector(self):
+        #get sector for one particular stock from sql database
+        pass
 
     def set_yahoo_pull_start_date(self, new_date):
         self.yahoo_pull_start_date = new_date
