@@ -225,7 +225,16 @@ class Stock:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
 
+    def get_price_range(self, from_date = datetime.date(2000,1,1), to_date = datetime.date.today()):
+        from_date = datetime.date(from_date)
+        to_date = datetime.date(to_date)
+        try:
+            return self.data.loc[from_date : to_date]
+        except TypeError:
+            print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
+    def plot_technical_levels():
+        pass
 
 
 
