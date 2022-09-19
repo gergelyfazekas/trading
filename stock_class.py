@@ -6,6 +6,7 @@ import numpy as np
 import database
 import sys
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
 
 # Constants
 MAX_WORKERS = 20
@@ -233,7 +234,35 @@ class Stock:
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
-    def plot_technical_levels():
+    def get_technical_levels(self, from_date, to_date, distance = 4, threshold = 1, width = 0.005):
+        data_chunk = self.get_price_range(from_date, to_date)
+        peaks, _ = find_peaks(data_chunk['Close'], distance=distance, threshold=threshold)
+        troughs, _ = find_peaks(data_chunk['Close'] * (-1), distance=distance, threshold=threshold)
+        peaks_troughs_df = data_chunk.loc[np.concatenate((peaks, troughs), ('Date', 'Close'))]
+        peaks_troughs_df = peaks_troughs_df.sort_values(by='Close')
+
+        # if the next price level is within 'width' add it to the ith technical level
+        # don't care if added multiple times -- convert tech_levels lower level lists to sets (or only min-max values)
+        tech_levels = []
+        for i in range(len(peaks_troughs_df['Close'])):
+            tech_levels[i] = []
+            for k in range(i+1, len(peaks_troughs_df['Close'])):
+                if abs(peaks_troughs_df.loc[i, 'Close'] -
+                       peaks_troughs_df.loc[k, 'Close']) < width * peaks_troughs_df.loc[i, 'Close']:
+                    tech_levels[i].append(peaks_troughs_df.loc[(i,k), 'Close'])
+
+        # dropping empty sublists of tech_levels list-of-lists
+        empty = []
+        for j in range(len(tech_levels)):
+            if not sublist[j]:
+                empty.append(j)
+        for l in empty:
+            tech_levels.pop(l)
+
+
+        pass
+
+    def plot_technical_levels(self):
         pass
 
 
