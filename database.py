@@ -63,13 +63,13 @@ def check_connection(mycursor, db):
 		mycursor, db = sql_connect()
 
 
-def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = datetime.date(2015,1,1), end_date = None):
+def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = None, end_date = None):
 	check_connection(mycursor,db)
 
 	if start_date is None:
 		mycursor.execute("SELECT date_ FROM stock_prices ORDER BY id DESC LIMIT 1")
 		last_date = mycursor.fetchall()
-		start_date = last_date[0][0].date() + datetime.timedelta(days = 1)
+		start_date = last_date[0][0] + datetime.timedelta(days = 1)
 
 	if end_date is None:
 		end_date = start_date + datetime.timedelta(days = length)

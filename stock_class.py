@@ -131,6 +131,8 @@ class Stock:
         if not isinstance(new_dataframe, pd.DataFrame):
             print(new_dataframe)
             raise TypeError('new_dataframe: not pandas.dataframe')
+        new_dataframe.rename(columns={'date_':'Date', 'close':'Close', 'ticker':'Ticker'}, inplace=True)
+        new_dataframe.set_index(new_dataframe['Date'], inplace=True)
         self.data = new_dataframe
 
     def set_sector(self):
@@ -154,9 +156,13 @@ class Stock:
             relative_profits = \
                 self.data['Close'].iloc[(close_idx+1) : close_idx + look_ahead_range]/self.data['Close'].iloc[close_idx]
 
+            # minus 1: so that a 4% decrease is not represented as 96% but as -4%
+            # this leads to a plus in the minmax method
+            relative_profits = relative_profits - 1
+
             if method == 'minmax':
                 if not len(relative_profits) == 0:
-                    label.append(max(relative_profits) - (2 * min(relative_profits)))
+                    label.append(max(relative_profits) + (2 * min(relative_profits)))
                 else:
                     label.append(np.nan)
             elif method == 'max':
@@ -199,7 +205,7 @@ class Stock:
 
         self.data[f'sma_cross_{sma_short_days}_{sma_long_days}'] = crosses
 
-    def rsi_calc(self, lookback):
+    def rsi_calc(self, lookback=14):
         # values = self.data['Close'].iloc[-lookback:]
         # diffs = [values[x+1]-values[x] for x in range(len(values)-1)]
         # diffs = pd.Series(diffs)
@@ -213,33 +219,41 @@ class Stock:
         self.data[f'rsi_{lookback}'] = 100 - (100 / (1 + rs_factor))
 
     def show(self, from_date = datetime.date(2000,1,1), to_date = datetime.date.today()):
-        from_date = datetime.date(from_date)
-        to_date = datetime.date(to_date)
+        if not isinstance(from_date, datetime.date):
+            from_date = datetime.date(from_date)
+        if not isinstance(to_date, datetime.date):
+            to_date = datetime.date(to_date)
         chunk = self.data.loc[from_date : to_date]
         plt.plot(chunk['Close'])
         plt.show()
 
     def get_price(self, date):
         try:
-            return self.data['Close'].loc[str(date)]
+            return self.data.loc[date, 'Close']
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
 
     def get_price_range(self, from_date = datetime.date(2000,1,1), to_date = datetime.date.today()):
-        from_date = datetime.date(from_date)
-        to_date = datetime.date(to_date)
         try:
             return self.data.loc[from_date : to_date]
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
-    def get_technical_levels(self, from_date, to_date, distance = 4, threshold = 1, width = 0.005):
+    def get_technical_levels(self,
+                             from_date = datetime.date(2000,1,1),
+                             to_date = datetime.date.today(),
+                             distance = 1,
+                             threshold = 0,
+                             width = 0.005):
         data_chunk = self.get_price_range(from_date, to_date)
+        print('data_chunk',data_chunk)
         peaks, _ = find_peaks(data_chunk['Close'], distance=distance, threshold=threshold)
+        print('peaks', peaks)
         troughs, _ = find_peaks(data_chunk['Close'] * (-1), distance=distance, threshold=threshold)
-        peaks_troughs_df = data_chunk.loc[np.concatenate((peaks, troughs), ('Date', 'Close'))]
+        peaks_troughs_df = data_chunk.loc[self.data['Date'][np.concatenate((peaks, troughs))], ('Date', 'Close')]
         peaks_troughs_df = peaks_troughs_df.sort_values(by='Close')
+        print(peaks_troughs_df)
 
         # if the next price level is within 'width' add it to the ith technical level
         # don't care if added multiple times -- convert tech_levels lower level lists to sets (or only min-max values)
@@ -259,8 +273,7 @@ class Stock:
         for l in empty:
             tech_levels.pop(l)
 
-
-        pass
+        return tech_levels
 
     def plot_technical_levels(self):
         pass
