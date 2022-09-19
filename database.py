@@ -5,7 +5,7 @@ from pandas_datareader import data as wb
 import stock_class
 
 
-def sql_connect(host="localhost", user="root", database="trading_database"):
+def sql_connect(host="database-1.c30doxhxuudc.us-east-1.rds.amazonaws.com", user="admin", database="trading_test"):
 	db = mysql.connector.connect(
 		host= host,
 		user= user,
@@ -63,7 +63,7 @@ def check_connection(mycursor, db):
 		mycursor, db = sql_connect()
 
 
-def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = None, end_date = None):
+def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = datetime.date(2015,1,1), end_date = None):
 	check_connection(mycursor,db)
 
 	if start_date is None:
