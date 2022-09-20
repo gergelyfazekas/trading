@@ -1,9 +1,12 @@
 import concurrent.futures
 import datetime
+
+import matplotlib.pyplot
 from pandas_datareader import data as wb
 import pandas as pd
 import numpy as np
 import database
+import auxiliary_functions as aux
 import sys
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
@@ -26,18 +29,18 @@ class Stock:
         self.data = pd.DataFrame
         self.sector = str
         # portfolio related attributes
-        self.log = pd.DataFrame({'date':[np.nan]*PLACEHOLDER,
-                                  'amount': [np.nan]*PLACEHOLDER,
-                                  'price': [np.nan]*PLACEHOLDER,
-                                  'value': [np.nan]*PLACEHOLDER})
-        self.buy_log = pd.DataFrame({'date':[np.nan]*PLACEHOLDER,
-                                  'amount': [np.nan]*PLACEHOLDER,
-                                  'price': [np.nan]*PLACEHOLDER,
-                                  'value': [np.nan]*PLACEHOLDER})
-        self.sell_log = pd.DataFrame({'date':[np.nan]*PLACEHOLDER,
-                                  'amount': [np.nan]*PLACEHOLDER,
-                                  'price': [np.nan]*PLACEHOLDER,
-                                  'value': [np.nan]*PLACEHOLDER})
+        self.log = pd.DataFrame({'date': [np.nan] * PLACEHOLDER,
+                                 'amount': [np.nan] * PLACEHOLDER,
+                                 'price': [np.nan] * PLACEHOLDER,
+                                 'value': [np.nan] * PLACEHOLDER})
+        self.buy_log = pd.DataFrame({'date': [np.nan] * PLACEHOLDER,
+                                     'amount': [np.nan] * PLACEHOLDER,
+                                     'price': [np.nan] * PLACEHOLDER,
+                                     'value': [np.nan] * PLACEHOLDER})
+        self.sell_log = pd.DataFrame({'date': [np.nan] * PLACEHOLDER,
+                                      'amount': [np.nan] * PLACEHOLDER,
+                                      'price': [np.nan] * PLACEHOLDER,
+                                      'value': [np.nan] * PLACEHOLDER})
         self.current_amount = float
         self.current_value = float
 
@@ -45,7 +48,6 @@ class Stock:
         names = Stock.get_stock_names()
         if self.name not in names:
             self.__class__.stock_list.append(self)
-
 
     def __str__(self):
         print("Stock:")
@@ -118,7 +120,6 @@ class Stock:
                 return stock
         raise ValueError(f'stock_list does not contain {name}')
 
-
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
         if not isinstance(yahoo_data, pd.DataFrame):
@@ -131,12 +132,12 @@ class Stock:
         if not isinstance(new_dataframe, pd.DataFrame):
             print(new_dataframe)
             raise TypeError('new_dataframe: not pandas.dataframe')
-        new_dataframe.rename(columns={'date_':'Date', 'close':'Close', 'ticker':'Ticker'}, inplace=True)
+        new_dataframe.rename(columns={'date_': 'Date', 'close': 'Close', 'ticker': 'Ticker'}, inplace=True)
         new_dataframe.set_index(new_dataframe['Date'], inplace=True)
         self.data = new_dataframe
 
     def set_sector(self):
-        #get sector for one particular stock from sql database
+        # get sector for one particular stock from sql database
         pass
 
     def set_yahoo_pull_start_date(self, new_date):
@@ -145,7 +146,7 @@ class Stock:
     def set_yahoo_pull_end_date(self, new_date):
         self.yahoo_pull_end_date = new_date
 
-    def labeling_function(self, method = 'minmax'):
+    def labeling_function(self, method='minmax'):
         look_ahead_range = LOOK_AHEAD_RANGE
         label = []
 
@@ -154,7 +155,8 @@ class Stock:
 
         for close_idx in range(len(self.data['Close'])):
             relative_profits = \
-                self.data['Close'].iloc[(close_idx+1) : close_idx + look_ahead_range]/self.data['Close'].iloc[close_idx]
+                self.data['Close'].iloc[(close_idx + 1): close_idx + look_ahead_range] / self.data['Close'].iloc[
+                    close_idx]
 
             # minus 1: so that a 4% decrease is not represented as 96% but as -4%
             # this leads to a plus in the minmax method
@@ -174,7 +176,7 @@ class Stock:
                 label.append(relative_profits.mean())
 
         if len(label) < len(self.data['Close']):
-            diff_length = len(self.data['Close'])-len(label)
+            diff_length = len(self.data['Close']) - len(label)
             tmp_array = np.empty(diff_length)
             tmp_array[:] = np.nan
             label.append(list(tmp_array))
@@ -218,13 +220,20 @@ class Stock:
         rs_factor = up_sma / down_sma
         self.data[f'rsi_{lookback}'] = 100 - (100 / (1 + rs_factor))
 
-    def show(self, from_date = datetime.date(2000,1,1), to_date = datetime.date.today()):
+    def show(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), show_tech_levels = False, **kwargs):
         if not isinstance(from_date, datetime.date):
             from_date = datetime.date(from_date)
         if not isinstance(to_date, datetime.date):
             to_date = datetime.date(to_date)
-        chunk = self.data.loc[from_date : to_date]
+        chunk = self.data.loc[from_date: to_date]
+        first_date = chunk.first_valid_index()
+        last_date = chunk.last_valid_index()
         plt.plot(chunk['Close'])
+
+        if show_tech_levels:
+            tech_levels = self.get_technical_levels(from_date=first_date, to_date=last_date, kwargs=kwargs)
+            y_coords = [sum(sublist) / len(sublist) for sublist in tech_levels]
+            plt.hlines(y_coords, xmin=first_date, xmax=last_date)
         plt.show()
 
     def get_price(self, date):
@@ -233,53 +242,82 @@ class Stock:
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
-
-    def get_price_range(self, from_date = datetime.date(2000,1,1), to_date = datetime.date.today()):
+    def get_price_range(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today()):
         try:
-            return self.data.loc[from_date : to_date]
+            return self.data.loc[from_date: to_date]
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
-    def get_technical_levels(self,
-                             from_date = datetime.date(2000,1,1),
-                             to_date = datetime.date.today(),
-                             distance = 1,
-                             threshold = 0,
-                             width = 0.005):
+    def get_technical_levels(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), **kwargs):
+
+        """kwargs:
+        1)tech_width -- own argument determining the width of a level
+        2)other kwargs passed to scipy.signal.find_peaks"""
+
+        tech_width, height, threshold, distance, \
+        prominence, width, wlen, \
+        rel_height, plateau_size = aux.kwarg_handler(kwargs, ['tech_width', 'height', 'threshold', 'distance',
+                                                              'prominence', 'width', 'wlen',
+                                                              'rel_height', 'plateau_size'])
+
+        # rel_height = 0.5 is a scipy.signal.find_peaks specific default value
+        if rel_height is None:
+            rel_height = 0.5
+
         data_chunk = self.get_price_range(from_date, to_date)
-        print('data_chunk',data_chunk)
-        peaks, _ = find_peaks(data_chunk['Close'], distance=distance, threshold=threshold)
-        print('peaks', peaks)
-        troughs, _ = find_peaks(data_chunk['Close'] * (-1), distance=distance, threshold=threshold)
+        peaks, _ = find_peaks(data_chunk['Close'],
+                              height=height,
+                              distance=distance,
+                              threshold=threshold,
+                              prominence=prominence,
+                              width=width,
+                              wlen=wlen,
+                              rel_height=rel_height,
+                              plateau_size=plateau_size
+                              )
+        troughs, _ = find_peaks(data_chunk['Close'] * (-1),
+                              height=height,
+                              distance=distance,
+                              threshold=threshold,
+                              prominence=prominence,
+                              width=width,
+                              wlen=wlen,
+                              rel_height=rel_height,
+                              plateau_size=plateau_size
+                              )
         peaks_troughs_df = data_chunk.loc[self.data['Date'][np.concatenate((peaks, troughs))], ('Date', 'Close')]
         peaks_troughs_df = peaks_troughs_df.sort_values(by='Close')
-        print(peaks_troughs_df)
 
-        # if the next price level is within 'width' add it to the ith technical level
-        # don't care if added multiple times -- convert tech_levels lower level lists to sets (or only min-max values)
+        # if the next price level is within 'tech_width' add it to the ith technical level
+        # don't care if added multiple times (later converts tech_levels sublists to min-max values)
         tech_levels = []
+        close_column_idx = peaks_troughs_df.columns.get_loc('Close')
         for i in range(len(peaks_troughs_df['Close'])):
-            tech_levels[i] = []
-            for k in range(i+1, len(peaks_troughs_df['Close'])):
-                if abs(peaks_troughs_df.loc[i, 'Close'] -
-                       peaks_troughs_df.loc[k, 'Close']) < width * peaks_troughs_df.loc[i, 'Close']:
-                    tech_levels[i].append(peaks_troughs_df.loc[(i,k), 'Close'])
+            tech_levels.append([])
+            for k in range(i + 1, len(peaks_troughs_df['Close'])):
+                if abs(peaks_troughs_df.iloc[i, close_column_idx] -
+                       peaks_troughs_df.iloc[k, close_column_idx]) \
+                        < tech_width * peaks_troughs_df.iloc[i, close_column_idx]:
+                    tech_levels[i].append(peaks_troughs_df.iloc[[i, k], close_column_idx])
 
         # dropping empty sublists of tech_levels list-of-lists
-        empty = []
-        for j in range(len(tech_levels)):
-            if not sublist[j]:
-                empty.append(j)
-        for l in empty:
-            tech_levels.pop(l)
+        tech_levels = np.array(tech_levels)
+        tech_levels = tech_levels[np.nonzero(tech_levels)[0]].tolist()
+        tech_levels = [[min(sublist[0]), max(sublist[0])] for sublist in tech_levels]
+
+        # empty = []
+        # for j in range(len(tech_levels)):
+        #     if not tech_levels[j]:
+        #         empty.append(j)
+        # if not empty:
+        #     for l in empty:
+        #         tech_levels.pop(l)
 
         return tech_levels
 
-    def plot_technical_levels(self):
-        pass
-
-
-
-
-
-
+    def plot_technical_levels(self, from_date, to_date, **kwargs):
+        tech_levels = self.get_technical_levels(from_date=from_date, to_date=to_date, kwargs=kwargs)
+        y_coords = [sum(sublist) / len(sublist) for sublist in tech_levels]
+        self.show(from_date, to_date)
+        plt.hlines(y_coords, xmin=from_date, xmax=to_date)
+        plt.show()
