@@ -21,7 +21,7 @@ def sql_disconnect(cursor, db):
 	db.close()
 
 
-def insert_data_into_sql(ticker_df, mycursor, db):
+def insert_data_into_sql(ticker_df, mycursor, db, sql_table="stock_prices"):
 
 	if not isinstance(ticker_df, pd.DataFrame):
 		raise TypeError('ticker_df: not pandas.dataframe')
@@ -32,10 +32,10 @@ def insert_data_into_sql(ticker_df, mycursor, db):
 	data_to_list = ticker_df.values.tolist()
 	for x in range(len(data_to_list)):
 		tuple_values = tuple(data_to_list[x])
-		mycursor.execute("INSERT INTO stock_prices (high, low, open, close, volume, adj_close, date_, ticker) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", tuple_values)
+		mycursor.execute(f"INSERT INTO {sql_table} (high, low, open, close, volume, adj_close, date_, ticker) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", tuple_values)
 	db.commit()
 
-	mycursor.execute("SELECT * FROM stock_prices")
+	mycursor.execute(f"SELECT * FROM {sql_table}")
 	for x in mycursor:
 		print(x)
 
@@ -63,11 +63,11 @@ def check_connection(mycursor, db):
 		mycursor, db = sql_connect()
 
 
-def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = None, end_date = None):
+def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = None, end_date = None, sql_table="stock_prices"):
 	check_connection(mycursor,db)
 
 	if start_date is None:
-		mycursor.execute("SELECT date_ FROM stock_prices ORDER BY id DESC LIMIT 1")
+		mycursor.execute(f"SELECT date_ FROM {sql_table} ORDER BY id DESC LIMIT 1")
 		last_date = mycursor.fetchall()
 		start_date = last_date[0][0] + datetime.timedelta(days = 1)
 
@@ -81,7 +81,10 @@ def fill_sql_from_yahoo(mycursor,db, length = 2, start_date = None, end_date = N
 
 	futures = stock_class.Stock.yahoo_pull_data_for_stock_list()
 	for futures_item in futures:
-		insert_data_into_sql(futures_item.result(), mycursor, db)
+		try:
+			insert_data_into_sql(futures_item.result(), mycursor, db)
+		except KeyError: 
+			pass
 
 
 def main():
