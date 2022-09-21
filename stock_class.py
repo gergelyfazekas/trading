@@ -174,19 +174,14 @@ class Stock:
                     label.append(np.nan)
             elif method == 'avg':
                 label.append(relative_profits.mean())
-
+        # padding 
         if len(label) < len(self.data['Close']):
             diff_length = len(self.data['Close']) - len(label)
-            tmp_array = np.empty(diff_length)
-            tmp_array[:] = np.nan
-            label.append(list(tmp_array))
+            padding = np.array([np.nan]*diff_length)
+            label.append(list(padding))
 
         self.data[f'label_{method}'] = label
 
-        # Other approach:
-        # maxima = self.data['Close'][::-1].rolling(window=look_ahead_range).max()[::-1]
-        # minima = self.data['Close'][::-1].rolling(window=look_ahead_range).min()[::-1]
-        # self.data['label'] = maxima - (2 * minima)
 
     def sma_calc(self, period=20):
         self.data[f'sma_{period}'] = self.data['Close'].rolling(window=period).mean()
@@ -208,10 +203,6 @@ class Stock:
         self.data[f'sma_cross_{sma_short_days}_{sma_long_days}'] = crosses
 
     def rsi_calc(self, lookback=14):
-        # values = self.data['Close'].iloc[-lookback:]
-        # diffs = [values[x+1]-values[x] for x in range(len(values)-1)]
-        # diffs = pd.Series(diffs)
-
         diffs = self.data['Close'].diff()
         ups = diffs.where(diffs > 0, 0)
         downs = -1 * diffs.where(diffs < 0, 0)
@@ -221,6 +212,9 @@ class Stock:
         self.data[f'rsi_{lookback}'] = 100 - (100 / (1 + rs_factor))
 
     def show(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), show_tech_levels = False, **kwargs):
+        """kwargs:
+        1)tech_width -- own argument determining the width of a tech_level
+        2)other kwargs passed to scipy.signal.find_peaks"""
         if not isinstance(from_date, datetime.date):
             from_date = datetime.date(from_date)
         if not isinstance(to_date, datetime.date):
@@ -231,7 +225,7 @@ class Stock:
         plt.plot(chunk['Close'])
 
         if show_tech_levels:
-            tech_levels = self.get_technical_levels(from_date=first_date, to_date=last_date, kwargs=kwargs)
+            tech_levels = self.get_technical_levels(from_date=first_date, to_date=last_date, **kwargs)
             y_coords = [sum(sublist) / len(sublist) for sublist in tech_levels]
             plt.hlines(y_coords, xmin=first_date, xmax=last_date)
         plt.show()
@@ -248,76 +242,77 @@ class Stock:
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
-    def get_technical_levels(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), **kwargs):
-
-        """kwargs:
-        1)tech_width -- own argument determining the width of a level
-        2)other kwargs passed to scipy.signal.find_peaks"""
-
-        tech_width, height, threshold, distance, \
-        prominence, width, wlen, \
-        rel_height, plateau_size = aux.kwarg_handler(kwargs, ['tech_width', 'height', 'threshold', 'distance',
-                                                              'prominence', 'width', 'wlen',
-                                                              'rel_height', 'plateau_size'])
-
-        # rel_height = 0.5 is a scipy.signal.find_peaks specific default value
-        if rel_height is None:
-            rel_height = 0.5
+    def get_high_volumes(self, from_date = datetime.date(2000,1,1), to_date= datetime.date.today(),
+                         auto = True,
+                         number = None,
+                         **kwargs):
+        """arguments:
+        auto: if True the top 10 volumes plus the find_peaks(volumes, **kwargs) are returned
+        number: if not None then the top number of volumes are returned from the set found by auto
+        kwargs: passed to scipy.signal.find_peaks()"""
 
         data_chunk = self.get_price_range(from_date, to_date)
-        peaks, _ = find_peaks(data_chunk['Close'],
-                              height=height,
-                              distance=distance,
-                              threshold=threshold,
-                              prominence=prominence,
-                              width=width,
-                              wlen=wlen,
-                              rel_height=rel_height,
-                              plateau_size=plateau_size
-                              )
-        troughs, _ = find_peaks(data_chunk['Close'] * (-1),
-                              height=height,
-                              distance=distance,
-                              threshold=threshold,
-                              prominence=prominence,
-                              width=width,
-                              wlen=wlen,
-                              rel_height=rel_height,
-                              plateau_size=plateau_size
-                              )
-        peaks_troughs_df = data_chunk.loc[self.data['Date'][np.concatenate((peaks, troughs))], ('Date', 'Close')]
-        peaks_troughs_df = peaks_troughs_df.sort_values(by='Close')
+        auto_size = min(10, len(data_chunk['volume']))
+        max_dates_idx = pd.Series(data_chunk['volume'].sort_values()[-auto_size:].index)
+        peak_vol_idx, _ = find_peaks(data_chunk['volume'], **kwargs)
+        peak_vol_dates = data_chunk['Date'][peak_vol_idx]
+        unique_dates = peak_vol_dates.append(max_dates_idx, ignore_index=True)
+        peaks_df = data_chunk.loc[self.data['Date'][unique_dates.drop_duplicates()], ('Date', 'volume')]
+        return peaks_df
 
+    def get_technical_levels(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), **kwargs):
+        """kwargs:
+        1)tech_width -- own argument determining the width of a level
+        2)consider_volume = True
+        2)other kwargs passed to scipy.signal.find_peaks"""
+        try:
+            tech_width = kwargs['tech_width']
+            kwargs.pop('tech_width')
+        except KeyError:
+            tech_width = 0.005
+
+        try:
+            consider_volume = kwargs['consider_volume']
+            kwargs.pop('consider_volume')
+        except KeyError:
+            consider_volume = True
+
+        try:
+            kwargs['rel_height']
+        except KeyError:
+            kwargs['rel_height'] = 0.5
+
+        data_chunk = self.get_price_range(from_date, to_date)
+        peaks, _ = find_peaks(data_chunk['Close'], **kwargs)
+        troughs, _ = find_peaks(data_chunk['Close'] * (-1), **kwargs)           
+
+        if consider_volume:
+            high_vol_df = self.get_high_volumes(from_date, to_date)
+
+        high_price_df = data_chunk.loc[
+            self.data['Date'][np.concatenate((peaks, troughs))],
+            ('Date', 'Close')
+            ]
+        if consider_volume:
+            unique_dates = high_vol_df['Date'].append(high_price_df['Date'], ignore_index=True)
+            tech_df = data_chunk.loc[unique_dates.drop_duplicates(),('Date', 'Close')]
         # if the next price level is within 'tech_width' add it to the ith technical level
         # don't care if added multiple times (later converts tech_levels sublists to min-max values)
         tech_levels = []
-        close_column_idx = peaks_troughs_df.columns.get_loc('Close')
-        for i in range(len(peaks_troughs_df['Close'])):
+        close_column_idx = tech_df.columns.get_loc('Close')
+        for i in range(len(tech_df['Close'])):
             tech_levels.append([])
-            for k in range(i + 1, len(peaks_troughs_df['Close'])):
-                if abs(peaks_troughs_df.iloc[i, close_column_idx] -
-                       peaks_troughs_df.iloc[k, close_column_idx]) \
-                        < tech_width * peaks_troughs_df.iloc[i, close_column_idx]:
-                    tech_levels[i].append(peaks_troughs_df.iloc[[i, k], close_column_idx])
+            for k in range(i + 1, len(tech_df['Close'])):
+                if abs(tech_df.iloc[i, close_column_idx] -
+                       tech_df.iloc[k, close_column_idx]) \
+                        < tech_width * tech_df.iloc[i, close_column_idx]:
+                    tech_levels[i].append(tech_df.iloc[[i, k], close_column_idx])
 
         # dropping empty sublists of tech_levels list-of-lists
         tech_levels = np.array(tech_levels)
         tech_levels = tech_levels[np.nonzero(tech_levels)[0]].tolist()
         tech_levels = [[min(sublist[0]), max(sublist[0])] for sublist in tech_levels]
 
-        # empty = []
-        # for j in range(len(tech_levels)):
-        #     if not tech_levels[j]:
-        #         empty.append(j)
-        # if not empty:
-        #     for l in empty:
-        #         tech_levels.pop(l)
-
         return tech_levels
 
-    def plot_technical_levels(self, from_date, to_date, **kwargs):
-        tech_levels = self.get_technical_levels(from_date=from_date, to_date=to_date, kwargs=kwargs)
-        y_coords = [sum(sublist) / len(sublist) for sublist in tech_levels]
-        self.show(from_date, to_date)
-        plt.hlines(y_coords, xmin=from_date, xmax=to_date)
-        plt.show()
+
