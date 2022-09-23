@@ -6,7 +6,6 @@ from pandas_datareader import data as wb
 import pandas as pd
 import numpy as np
 import database
-import auxiliary_functions as aux
 import sys
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
@@ -119,6 +118,16 @@ class Stock:
             if stock.name == name:
                 return stock
         raise ValueError(f'stock_list does not contain {name}')
+
+    @classmethod
+    def random_sample_stocks(cls, num_draws):
+        if len(cls.stock_list) < num_draws:
+            raise ValueError("num_draws larger than stock_list")
+        idx_lst = np.random.randint(0, len(cls.stock_list) - 1, num_draws)
+        drawn_stocks = []
+        for idx in idx_lst:
+            drawn_stocks.append(cls.stock_list[idx])
+        return drawn_stocks
 
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
@@ -283,8 +292,8 @@ class Stock:
             kwargs['rel_height'] = 0.5
 
         data_chunk = self.get_price_range(from_date, to_date)
-        peaks, _ = find_peaks(data_chunk['Close'], **kwargs)
-        troughs, _ = find_peaks(data_chunk['Close'] * (-1), **kwargs)           
+        peaks, _ = find_peaks((data_chunk['Close']/data_chunk['Close'][-1]), **kwargs)
+        troughs, _ = find_peaks((data_chunk['Close']/data_chunk['Close'][-1]) * (-1), **kwargs)
 
         if consider_volume:
             high_vol_df = self.get_high_volumes(from_date, to_date)
