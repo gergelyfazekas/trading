@@ -11,8 +11,7 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
     """arguments:
     stocks: a list of Stock instances selected by hand or using Stock.random_sample_stocks() function
     param_space: a dictionary of parameters to tune, key: parameter name, value: list of values to consider
-    search: search method, one of ('grid', 'random'), if random then the 3rd of total combinations is searched randomly
-    save: bool, if True the parameters are saved in tune_tech_levels.csv"""
+    search: search method, one of ('grid', 'random'), if random then the 3rd of total combinations is searched randomly"""
     if not isinstance(param_space, dict):
         raise TypeError('param_space should be a dictionary')
     if not isinstance(stocks, list):
@@ -24,18 +23,14 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
     if search not in ['grid', 'random']:
         raise ValueError('search should be one of "grid", "random"')
 
-    for stock in stocks:
-        num_iter = 1
-        for param_lst in param_space.values():
-            num_iter *= len(param_lst)
 
-        num_keys = len(list(param_space.values()))
-        counter = 1
-        combo = list(param_space.values())[0]
-        while counter < num_keys:
-            combo = combine_lists(combo, list(param_space.values())[counter])
-            counter += 1
-        print(combo)
+    num_keys = int(len(param_space))
+    counter = 1
+    combo = list(param_space.values())[0]
+    while counter < num_keys:
+        combo = combine_lists(combo, list(param_space.values())[counter])
+        counter += 1
+    if len(param_space) > 2:
         for idx in range(len(combo)):
             combo[idx] = flatten(combo[idx], int(len(param_space)-2))
 
@@ -43,18 +38,22 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
         random.shuffle(combo)
         combo = combo[::3]
 
+    result = []
     for params in combo:
-        print('paramspcae_keys', list(param_space.keys()))
-        print('params', params)
-        param_dict = dict(zip(param_space.keys(), params))
-
-        plt.ion()
-        stock.show(from_date, to_date, show_tech_levels=True, **param_dict)
-        plt.pause(0.001)
-        user_input = str(input(f'Press "g" for good and "b" for bad'))
-        print(f'{param_dict} -- {user_input}')
-        plt.close()
-    return user_input
+        user_input = []
+        for stock in stocks:
+            if not isinstance(params, list):
+                params = [params]
+            user_input.append(params)
+            param_dict = dict(zip(param_space.keys(), params))
+            plt.ion()
+            stock.show(from_date, to_date, show_tech_levels=True, **param_dict)
+            plt.pause(0.001)
+            user_input.append(str(input(f'Press "g" for good and "b" for bad')))
+            print(f'{param_dict} -- {user_input}')
+            plt.close()
+        result.append(user_input)
+    return result
 
 def combine_lists(lst1, lst2):
     if len(lst1) >= len(lst2):
