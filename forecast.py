@@ -3,12 +3,13 @@ import stock_class
 
 
 from sklearn.ensemble import RandomForestRegressor
-import tensorflow_decision_forests as tfdf
+# import tensorflow_decision_forests as tfdf
+import xgboost as xgb
 
 
 def random_forest_sklearn(X,y,n_estimators=100,min_samples_leaf=20, n_jobs=-2, **kwargs):
     """See kwargs at https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html"""
-    model = RandomForestRegressor(n_estimators, min_samples_leaf, n_jobs, kwargs)
+    model = RandomForestRegressor(n_estimators=n_estimators, min_samples_leaf=min_samples_leaf, n_jobs=n_jobs, **kwargs)
     model.fit(X,y)
     return model
 
@@ -33,10 +34,15 @@ def boosting_sklearn():
 def boosting_keras():
     pass
 
-def xgboost():
+def xgbooster(train_txt_path, num_round, param_dict=None):
     """xgboost.train supports custom objective functions, xgboost.cv supports cross validation
-    https://xgboost.readthedocs.io/en/stable/python/python_api.html"""
-    pass
+    https://xgboost.readthedocs.io/en/stable/python/python_api.html,
+    sample code: https://xgboost.readthedocs.io/en/stable/get_started.html"""
+    dtrain = xgb.DMatrix(train_txt_path)
+    if not param_dict:
+        param_dict = {'max_depth':2, 'eta':1, 'objective':'reg:squarederror'}
+    model = xgb.train(param_dict, dtrain, num_round)
+    return model
 
 def neural_net():
     pass
