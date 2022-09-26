@@ -13,32 +13,37 @@ from stock_class import Stock
 DATE = datetime.date(2007, 1, 12)
 
 class Portfolio:
-    created = False
+    portfolio_list = []
 
-    def __init__(self, cash):
+    def __init__(self, genome, cash):
         if isinstance(cash, (int, float)):
-            if not self.__class__.created:
-                self.__class__.created = True
-                self.cash = cash
-                self.current_invested_value = 0
-                self.total_portfolio_value = self.cash + self.current_invested_value
-                self.number_of_stocks = int
-                self.sectors = list
-                self.currencies = list
-                self.proportion_invested = self.current_invested_value / self.total_portfolio_value
-                self.log = pd.DataFrame({'date': [np.nan]*stock_class.PLACEHOLDER,
-                                         'stock_name': [np.nan]*stock_class.PLACEHOLDER,
-                                         'direction': [np.nan]*stock_class.PLACEHOLDER,
+            __class__.portfolio_list.append(self)
+            self.exchange = "NASDAQ"
+            self.genome = genome
+            self.cash = cash
+            self.current_invested_value = 0
+            self.total_portfolio_value = self.cash + self.current_invested_value
+            self.number_of_stocks = int
+            self.sectors = list
+            self.currencies = list
+            self.proportion_invested = self.current_invested_value / self.total_portfolio_value
+            self.log = pd.DataFrame({'date': [np.nan]*stock_class.PLACEHOLDER,
+                                     'stock_name': [np.nan]*stock_class.PLACEHOLDER,
+                                     'direction': [np.nan]*stock_class.PLACEHOLDER,
+                                     'amount': [np.nan]*stock_class.PLACEHOLDER,
+                                     'price': [np.nan]*stock_class.PLACEHOLDER,
+                                     'value': [np.nan]*stock_class.PLACEHOLDER})
+            self.balance = pd.DataFrame({'stock_name': [np.nan]*stock_class.PLACEHOLDER,
                                          'amount': [np.nan]*stock_class.PLACEHOLDER,
                                          'price': [np.nan]*stock_class.PLACEHOLDER,
-                                         'value': [np.nan]*stock_class.PLACEHOLDER})
-                self.balance = pd.DataFrame({'stock_name': [np.nan]*stock_class.PLACEHOLDER,
-                                             'amount': [np.nan]*stock_class.PLACEHOLDER,
-                                             'price': [np.nan]*stock_class.PLACEHOLDER,
-                                             'value': [np.nan]*stock_class.PLACEHOLDER,
-                                             'sector': [np.nan]*stock_class.PLACEHOLDER})
+                                         'value': [np.nan]*stock_class.PLACEHOLDER,
+                                         'sector': [np.nan]*stock_class.PLACEHOLDER})
 
-
+    def __eq__(self, other):
+        if self.genome == other.genome and self.cash == other.cash and self.exchange == other.exchange:
+            return True
+        else:
+            return False
 
     def got_enough_cash(self, value):
         if isinstance(value, (float, int)):
@@ -69,6 +74,9 @@ class Portfolio:
                 return False
         else:
             raise TypeError('value not in (int, float)')
+
+    def get_stock_amount(self, stock):
+        return self.balance[balance['stock_name'] == stock.name]['amount']
 
     def deduct_cash(self, amount):
         if isinstance(amount, (float, int)):

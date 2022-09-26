@@ -1,4 +1,3 @@
-import portfolio_class
 import stock_class
 
 
