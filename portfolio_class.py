@@ -22,11 +22,9 @@ class Portfolio:
             self.genome = genome
             self.cash = cash
             self.current_invested_value = 0
-            self.total_portfolio_value = self.cash + self.current_invested_value
             self.number_of_stocks = int
             self.sectors = list
             self.currencies = list
-            self.proportion_invested = self.current_invested_value / self.total_portfolio_value
             self.log = pd.DataFrame({'date': [np.nan]*stock_class.PLACEHOLDER,
                                      'stock_name': [np.nan]*stock_class.PLACEHOLDER,
                                      'direction': [np.nan]*stock_class.PLACEHOLDER,
@@ -38,6 +36,8 @@ class Portfolio:
                                          'price': [np.nan]*stock_class.PLACEHOLDER,
                                          'value': [np.nan]*stock_class.PLACEHOLDER,
                                          'sector': [np.nan]*stock_class.PLACEHOLDER})
+            self.total_portfolio_value = self.cash + self.balance['value'].sum()
+            self.proportion_invested = self.current_invested_value / self.total_portfolio_value
 
     def __eq__(self, other):
         if self.genome == other.genome and self.cash == other.cash and self.exchange == other.exchange:
@@ -62,7 +62,7 @@ class Portfolio:
     def got_enough_amount(self, stock, amount):
         if isinstance(amount, (float, int)):
             if amount <= 0:
-                if abs(amount) <= self.balance[balance['stock_name'] == stock.name]['amount']:
+                if abs(amount) <= self.balance[self.balance['stock_name'] == stock.name]['amount'][0]:
                     return True
                 else:
                     print(f'Balance contains less amount of {stock.name}'
@@ -76,7 +76,8 @@ class Portfolio:
             raise TypeError('value not in (int, float)')
 
     def get_stock_amount(self, stock):
-        return self.balance[balance['stock_name'] == stock.name]['amount']
+        return self.balance.loc[self.balance['stock_name'] == stock.name, 'amount']
+
 
     def deduct_cash(self, amount):
         if isinstance(amount, (float, int)):
@@ -144,6 +145,8 @@ class Portfolio:
     def buy(self, stock, amount, date = DATE):
         if not isinstance(stock, Stock):
             raise TypeError(f'Not Stock instance! type given: {type(stock)}')
+        if not isinstance(date, datetime.date):
+            raise TypeError(f'date should be datetime.date and not {type(date)}')
 
         if amount >= 0:
             price = stock.get_price(date)
