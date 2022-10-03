@@ -13,7 +13,7 @@ from scipy.signal import find_peaks
 # Constants
 MAX_WORKERS = 20
 LOOK_AHEAD_RANGE = 31
-PLACEHOLDER = 10
+PLACEHOLDER = 1000
 
 
 class Stock:
@@ -239,9 +239,9 @@ class Stock:
             plt.hlines(y_coords, xmin=first_date, xmax=last_date)
         plt.show()
 
-    def get_price(self, date):
+    def get_price(self, as_of):
         try:
-            return self.data.loc[date, 'Close']
+            return self.data.loc[as_of, 'Close']
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
