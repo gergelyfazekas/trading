@@ -31,7 +31,7 @@ class Portfolio:
             self.number_of_stocks = int
             self.sectors = list
             self.currencies = list
-            self.log = pd.DataFrame({'date': [np.nan] * stock_class.PLACEHOLDER,
+            self.log = pd.DataFrame({'date_': [np.nan] * stock_class.PLACEHOLDER,
                                      'stock_name': [np.nan] * stock_class.PLACEHOLDER,
                                      'direction': [np.nan] * stock_class.PLACEHOLDER,
                                      'amount': [np.nan] * stock_class.PLACEHOLDER,
@@ -182,7 +182,7 @@ class Portfolio:
             idx = self.log['stock_name'].last_valid_index()
             if isinstance(idx, (int, float)):
                 try:
-                    self.log.iloc[idx + 1, self.log.columns.get_loc('date')] = as_of
+                    self.log.iloc[idx + 1, self.log.columns.get_loc('date_')] = as_of
                     self.log.iloc[idx + 1, self.log.columns.get_loc('stock_name')] = stock.name
                     self.log.iloc[idx + 1, self.log.columns.get_loc('direction')] = direction
                     self.log.iloc[idx + 1, self.log.columns.get_loc('amount')] = amount
@@ -192,7 +192,7 @@ class Portfolio:
                     print('max index reached, iloc cannot expand the dataframe', self.log)
 
             elif idx is None:
-                self.log.iloc[0, self.log.columns.get_loc('date')] = as_of
+                self.log.iloc[0, self.log.columns.get_loc('date_')] = as_of
                 self.log.iloc[0, self.log.columns.get_loc('stock_name')] = stock.name
                 self.log.iloc[0, self.log.columns.get_loc('direction')] = direction
                 self.log.iloc[0, self.log.columns.get_loc('amount')] = amount

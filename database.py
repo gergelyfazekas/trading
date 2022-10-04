@@ -3,6 +3,7 @@ import datetime
 import pandas as pd
 from pandas_datareader import data as wb
 import stock_class
+import tuning
 
 
 def sql_connect(host="database-1.c30doxhxuudc.us-east-1.rds.amazonaws.com", user="admin", database="trading_test"):
@@ -55,8 +56,19 @@ def price_query_sql(ticker_name, mycursor, db, start_date=datetime.date(1990,1,1
 					 f'AND "{end_date}"')
 	quried_data = mycursor.fetchall()
 	ticker_df = pd.DataFrame(data=quried_data, columns=database_columns)
+	ticker_df.loc[:,'date_'] = pd.to_datetime(ticker_df.loc[:,'date_'])
+	ticker_df.set_index('date_', inplace=True)
+	# other functions might want to refer to 'date_' or index
+	ticker_df['date_'] = ticker_df.index
 	return ticker_df
 
+
+def get_unique_names_sql(mycursor, db, sql_table = 'stock_prices'):
+	check_connection(mycursor, db)
+	mycursor.execute(f"SELECT DISTINCT ticker FROM {sql_table}")
+	queried_data = mycursor.fetchall()
+	unique_names = tuning.flatten(queried_data,num_iter=1)
+	return unique_names
 
 def check_connection(mycursor, db):
 	if not db.is_connected():

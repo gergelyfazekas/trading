@@ -1,6 +1,5 @@
 import concurrent.futures
 import datetime
-
 import matplotlib.pyplot
 from pandas_datareader import data as wb
 import pandas as pd
@@ -28,15 +27,15 @@ class Stock:
         self.data = pd.DataFrame
         self.sector = str
         # portfolio related attributes
-        self.log = pd.DataFrame({'date': [np.nan] * PLACEHOLDER,
+        self.log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
                                  'amount': [np.nan] * PLACEHOLDER,
                                  'price': [np.nan] * PLACEHOLDER,
                                  'value': [np.nan] * PLACEHOLDER})
-        self.buy_log = pd.DataFrame({'date': [np.nan] * PLACEHOLDER,
+        self.buy_log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
                                      'amount': [np.nan] * PLACEHOLDER,
                                      'price': [np.nan] * PLACEHOLDER,
                                      'value': [np.nan] * PLACEHOLDER})
-        self.sell_log = pd.DataFrame({'date': [np.nan] * PLACEHOLDER,
+        self.sell_log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
                                       'amount': [np.nan] * PLACEHOLDER,
                                       'price': [np.nan] * PLACEHOLDER,
                                       'value': [np.nan] * PLACEHOLDER})
@@ -74,6 +73,14 @@ class Stock:
     @classmethod
     def create_stock_list_from_csv(cls, filename="tickers_30.csv"):
         excel_data = pd.read_csv(open(filename, encoding="latin-1"))
+        tickers = excel_data['Symbol'].copy()
+        tickers = tickers.values.tolist()
+        for ticker in tickers:
+            Stock(name=ticker)
+
+    @classmethod
+    def create_stock_list_sql(cls, filename="tickers_30.csv"):
+
         tickers = excel_data['Symbol'].copy()
         tickers = tickers.values.tolist()
         for ticker in tickers:
@@ -121,6 +128,8 @@ class Stock:
 
     @classmethod
     def random_sample_stocks(cls, num_draws):
+        if len(cls.stock_list) == 1:
+            return stock_list
         if len(cls.stock_list) < num_draws:
             raise ValueError("num_draws larger than stock_list")
         idx_lst = np.random.randint(0, len(cls.stock_list) - 1, num_draws)
@@ -133,16 +142,18 @@ class Stock:
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
         if not isinstance(yahoo_data, pd.DataFrame):
             raise TypeError('yahoo_data: not pandas.dataframe')
-        yahoo_data["Date"] = yahoo_data.index.strftime('%Y-%m-%d %X')
-        yahoo_data["Ticker"] = self.name
+        # yahoo_data['date_'] = yahoo_data.index.strftime('%Y-%m-%d %X')
+        yahoo_data['ticker'] = self.name
+        yahoo_data.index.name = 'date_'
+        uppercase_names = yahoo_data.columns
+        lowercase_names = [old_name.lower() for old_name in yahoo_data.columns]
+        yahoo_data.rename(columns=dict(zip(uppercase_names, lowercase_names)), inplace=True)
         return yahoo_data
 
     def set_data(self, new_dataframe):
         if not isinstance(new_dataframe, pd.DataFrame):
             print(new_dataframe)
             raise TypeError('new_dataframe: not pandas.dataframe')
-        new_dataframe.rename(columns={'date_': 'Date', 'close': 'Close', 'ticker': 'Ticker'}, inplace=True)
-        new_dataframe.set_index(new_dataframe['Date'], inplace=True)
         self.data = new_dataframe
 
     def set_sector(self):
@@ -162,9 +173,9 @@ class Stock:
         if method not in ['minmax', 'max', 'avg']:
             raise ValueError("Choose a correct method: 'minmax', 'max', 'avg'")
 
-        for close_idx in range(len(self.data['Close'])):
+        for close_idx in range(len(self.data['close'])):
             relative_profits = \
-                self.data['Close'].iloc[(close_idx + 1): close_idx + look_ahead_range] / self.data['Close'].iloc[
+                self.data['close'].iloc[(close_idx + 1): close_idx + look_ahead_range] / self.data['close'].iloc[
                     close_idx]
 
             # minus 1: so that a 4% decrease is not represented as 96% but as -4%
@@ -184,8 +195,8 @@ class Stock:
             elif method == 'avg':
                 label.append(relative_profits.mean())
         # padding 
-        if len(label) < len(self.data['Close']):
-            diff_length = len(self.data['Close']) - len(label)
+        if len(label) < len(self.data['close']):
+            diff_length = len(self.data['close']) - len(label)
             padding = np.array([np.nan]*diff_length)
             label.append(list(padding))
 
@@ -193,7 +204,7 @@ class Stock:
 
 
     def sma_calc(self, period=20):
-        self.data[f'sma_{period}'] = self.data['Close'].rolling(window=period).mean()
+        self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
 
     def sma_cross(self, sma_short_days, sma_long_days):
         if not f'sma_{sma_long_days}' in self.data.columns:
@@ -212,7 +223,7 @@ class Stock:
         self.data[f'sma_cross_{sma_short_days}_{sma_long_days}'] = crosses
 
     def rsi_calc(self, lookback=14):
-        diffs = self.data['Close'].diff()
+        diffs = self.data['close'].diff()
         ups = diffs.where(diffs > 0, 0)
         downs = -1 * diffs.where(diffs < 0, 0)
         up_sma = ups.rolling(window=lookback).mean()
@@ -225,13 +236,19 @@ class Stock:
         1)tech_width -- own argument determining the width of a tech_level
         2)other kwargs passed to scipy.signal.find_peaks"""
         if not isinstance(from_date, datetime.date):
-            from_date = datetime.date(from_date)
+            try:
+                from_date = datetime.date(from_date)
+            except TypeError:
+                print(f'type of from_date: {type(from_date)}')
         if not isinstance(to_date, datetime.date):
-            to_date = datetime.date(to_date)
+            try:
+                to_date = datetime.date(to_date)
+            except TypeError:
+                print(f'type of to_date: {type(from_date)}')
         chunk = self.data.loc[from_date: to_date]
         first_date = chunk.first_valid_index()
         last_date = chunk.last_valid_index()
-        plt.plot(chunk['Close'])
+        plt.plot(chunk['close'])
 
         if show_tech_levels:
             tech_levels = self.get_technical_levels(from_date=first_date, to_date=last_date, **kwargs)
@@ -241,7 +258,7 @@ class Stock:
 
     def get_price(self, as_of):
         try:
-            return self.data.loc[as_of, 'Close']
+            return self.data.loc[as_of, 'close']
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
@@ -264,9 +281,9 @@ class Stock:
         auto_size = min(10, len(data_chunk['volume']))
         max_dates_idx = pd.Series(data_chunk['volume'].sort_values()[-auto_size:].index)
         peak_vol_idx, _ = find_peaks(data_chunk['volume'], **kwargs)
-        peak_vol_dates = data_chunk['Date'][peak_vol_idx]
+        peak_vol_dates = data_chunk['date_'][peak_vol_idx]
         unique_dates = peak_vol_dates.append(max_dates_idx, ignore_index=True)
-        peaks_df = data_chunk.loc[self.data['Date'][unique_dates.drop_duplicates()], ('Date', 'volume')]
+        peaks_df = data_chunk.loc[self.data['date_'][unique_dates.drop_duplicates()], ('date_', 'volume')]
         return peaks_df
 
     def get_technical_levels(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), **kwargs):
@@ -292,26 +309,26 @@ class Stock:
             kwargs['rel_height'] = 0.5
 
         data_chunk = self.get_price_range(from_date, to_date)
-        peaks, _ = find_peaks((data_chunk['Close']/data_chunk['Close'][-1]), **kwargs)
-        troughs, _ = find_peaks((data_chunk['Close']/data_chunk['Close'][-1]) * (-1), **kwargs)
+        peaks, _ = find_peaks((data_chunk['close']/data_chunk['close'][-1]), **kwargs)
+        troughs, _ = find_peaks((data_chunk['close']/data_chunk['close'][-1]) * (-1), **kwargs)
 
         if consider_volume:
             high_vol_df = self.get_high_volumes(from_date, to_date)
 
         high_price_df = data_chunk.loc[
-            self.data['Date'][np.concatenate((peaks, troughs))],
-            ('Date', 'Close')
+            self.data['date_'][np.concatenate((peaks, troughs))],
+            ('date_', 'close')
             ]
         if consider_volume:
-            unique_dates = high_vol_df['Date'].append(high_price_df['Date'], ignore_index=True)
-            tech_df = data_chunk.loc[unique_dates.drop_duplicates(),('Date', 'Close')]
+            unique_dates = high_vol_df['date_'].append(high_price_df['date_'], ignore_index=True)
+            tech_df = data_chunk.loc[unique_dates.drop_duplicates(),('date_', 'close')]
         # if the next price level is within 'tech_width' add it to the ith technical level
         # don't care if added multiple times (later converts tech_levels sublists to min-max values)
         tech_levels = []
-        close_column_idx = tech_df.columns.get_loc('Close')
-        for i in range(len(tech_df['Close'])):
+        close_column_idx = tech_df.columns.get_loc('close')
+        for i in range(len(tech_df['close'])):
             tech_levels.append([])
-            for k in range(i + 1, len(tech_df['Close'])):
+            for k in range(i + 1, len(tech_df['close'])):
                 if abs(tech_df.iloc[i, close_column_idx] -
                        tech_df.iloc[k, close_column_idx]) \
                         < tech_width * tech_df.iloc[i, close_column_idx]:
