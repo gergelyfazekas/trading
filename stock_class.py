@@ -142,13 +142,35 @@ class Stock:
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
         if not isinstance(yahoo_data, pd.DataFrame):
             raise TypeError('yahoo_data: not pandas.dataframe')
-        # yahoo_data['date_'] = yahoo_data.index.strftime('%Y-%m-%d %X')
         yahoo_data['ticker'] = self.name
-        yahoo_data.index.name = 'date_'
-        uppercase_names = yahoo_data.columns
-        lowercase_names = [old_name.lower() for old_name in yahoo_data.columns]
-        yahoo_data.rename(columns=dict(zip(uppercase_names, lowercase_names)), inplace=True)
-        return yahoo_data
+        self.set_data(yahoo_data)
+        self.lowercase()
+        self.set_index()
+        return self.data
+
+    def lowercase(self):
+        uppercase_names = self.data.columns
+        lowercase_names = [old_name.lower() for old_name in self.data.columns]
+        self.data.rename(columns=dict(zip(uppercase_names, lowercase_names)), inplace=True)
+
+    def set_index(self):
+        if self.data.index.name != 'date_':
+            if self.data.index.name != 'Date':
+                if not 'date_' in self.data.columns:
+                    try:
+                        self.data['date_'] = self.data['Date']
+                    except KeyError:
+                        raise('No "date_" or "Date" column')
+                    self.data.set_index('date_', inplace=True)
+                else:
+                    self.data.set_index('date_', inplace=True)
+            else:
+                self.data.index.name = 'date_'
+        else:
+            pass
+
+        self.data.index = pd.to_datetime(self.data.index).date
+
 
     def set_data(self, new_dataframe):
         if not isinstance(new_dataframe, pd.DataFrame):
@@ -157,7 +179,6 @@ class Stock:
         self.data = new_dataframe
 
     def set_sector(self):
-        # get sector for one particular stock from sql database
         pass
 
     def set_yahoo_pull_start_date(self, new_date):

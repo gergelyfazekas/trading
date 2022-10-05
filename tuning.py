@@ -3,7 +3,7 @@
 import datetime
 import random
 import matplotlib.pyplot as plt
-from stock_class import Stock
+import stock_class
 import numpy as np
 
 
@@ -16,7 +16,7 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
         raise TypeError('param_space should be a dictionary')
     if not isinstance(stocks, list):
         raise TypeError('stocks should be a list')
-    if not isinstance(stocks[0], Stock):
+    if not isinstance(stocks[0], stock_class.Stock):
         raise TypeError('"stocks" should contain Stock instances')
     if not all([isinstance(dict_val, list) for dict_val in param_space.values()]):
         raise ValueError('all param_space values should be lists')

@@ -12,7 +12,83 @@ import pandas as pd
 import database
 
 
-def run_neat(config_file, max_gen=300):
+def run_neat(config_file, max_gen=300,
+             cash=500, pickeled_df_name='df.pickle',
+             stock_names = ['AAPL', 'MSFT'], threshold=0.05):
+
+    with open(pickeled_df_name, "rb") as f:
+        training_data = pickle.load(f)
+        training_data.sort_values(by='date_', inplace=True)
+        training_data = training_data.iloc[:200, :]
+
+    Stock.clear_stock_list()
+
+    def eval_genomes(genomes, config):
+        """evaluates every portfolio's genome by looping through
+            - all the dates of the training set and
+            - within every day it loops through all the stocks and
+            - decides what the action is and adjusts (buy/sell) the portfolio
+            - at the last date takes a look at the portfolio value to determine fitness
+
+            parameters:
+            genomes, config -- neat algorithm parameters
+            stocks -- list of stock instances to choose from
+            training_data -- a pd.df in sql format such as:
+                                     - the index is a datetime.date object and can be filtered by that
+                                     - all columns are covariates (no label/target is included)
+            cash_current -- the dollar value of a portfolio's budget
+            """
+
+        for ticker in training_data['ticker'].unique():
+            if not stock_names:
+                Stock(ticker)
+            else:
+                if ticker in stock_names:
+                    Stock(ticker)
+        for stock in Stock.stock_list:
+            stock.set_data(training_data[training_data['ticker'] == stock.name])
+            stock.lowercase()
+            stock.set_index()
+        stocks = Stock.stock_list
+        training_data.set_index("date_", inplace=True)
+
+        for genome_id, genome in genomes:
+            genome_portfolio = Portfolio(genome=genome, cash=cash)
+            for current_date in training_data.index.unique():
+                for stock in stocks:
+                    net = neat.nn.FeedForwardNetwork.create(genome, config)
+                    df = training_data[training_data['ticker'] == stock.name].loc[
+                        current_date, ["vol_1", "vol_2", "close_1", "close_2"]]
+                    output = net.activate(list(df))
+                    decision, proportion = output_to_decision(output[0], threshold=threshold)
+                    # currently the models proportion is applied on the remaining cash if buy so that we can never go beyond budget
+                    # for sell it is the proportion of the current amount (count) of the stock in the portfolio
+                    # another way would be to apply the proportion on the current portfolio value of the stock in question
+                    # but then we would have to discourage the behaviour of going beyond budget by reducing the fitness funciton
+                    # if genome_portfolio.got_enough_cash returns False
+                    if decision == 'buy':
+                        amount = (proportion * genome_portfolio.cash_current) / \
+                                 training_data[training_data['ticker'] == stock.name].loc[current_date, "close"]
+                        genome_portfolio.buy(stock=stock, amount=amount, as_of=current_date)
+                    elif decision == 'sell':
+                        amount = -1 * ((proportion * genome_portfolio.get_stock_amount(stock)) / \
+                                       training_data[training_data['ticker'] == stock.name].loc[current_date, "close"])
+                        genome_portfolio.sell(stock=stock, amount=amount, as_of=current_date)
+                    elif not decision:
+                        # do nothing within [0.5-threshold , 0.5+threshold]
+                        pass
+                    else:
+                        raise NotImplementedError
+            # fitness = portfolio value at the last date of the training set
+            # other option would be to check the portfolios value at the end of every year:
+            #   - and reduce the initial 500 with the place of the genome compared to the others
+            #   - so if the genome is the best every year it gets 500 - (10 years * 1st place) = 490
+            #   - if it is the 3rd every year then 500 - 10*3 = 470 ...
+            #   - this fitness function would incentivize interim good performance
+            #  We could also consider to terminate if genome.fitness reached a level
+            genome_portfolio.update_total_portfolio_value(as_of=current_date)
+            genome.fitness = genome_portfolio.total_portfolio_value
+
     # Load configuration.
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
@@ -25,7 +101,7 @@ def run_neat(config_file, max_gen=300):
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(1))
+    # p.add_reporter(neat.Checkpointer(1))
 
     # Run for up to max_gen generations.
     winner = p.run(eval_genomes, max_gen)
@@ -33,80 +109,9 @@ def run_neat(config_file, max_gen=300):
         pickle.dump(winner, f)
 
     winner_portf = [portf for portf in Portfolio.portfolio_list if portf.genome == winner][0]
-    return (winner, winner_portf)
+    return winner, winner_portf
 
-def eval_genomes(genomes, config):
-    """evaluates every portfolio's genome by looping through
-        - all the dates of the training set and
-        - within every day it loops through all the stocks and
-        - decides what the action is and adjusts (buy/sell) the portfolio
-        - at the last date takes a look at the portfolio value to determine fitness
 
-        parameters:
-        genomes, config -- neat algorithm parameters
-        stocks -- list of stock instances to choose from
-        training_data -- a pd.df in sql format such as:
-                                 - the index is a datetime.date object and can be filtered by that
-                                 - all columns are covariates (no label/target is included)
-        cash_current -- the dollar value of a portfolio's budget
-        """
-    cash = 500
-    with open("df.pickle", "rb") as f:
-        training_data = pickle.load(f)
-        training_data.sort_values(by='date_', inplace=True)
-        training_data = training_data.iloc[:200,:]
-    for ticker in training_data['ticker'].unique():
-        # Stock(ticker)
-        if ticker == 'AAPL':
-            Stock(ticker)
-        elif ticker == 'GOOG':
-            Stock(ticker)
-        # elif ticker == 'MSFT':
-        #     Stock(ticker)
-        # elif ticker == 'MSCI':
-        #     Stock(ticker)
-        # elif ticker == 'AMZN':
-        #     Stock(ticker)
-    for stock in Stock.stock_list:
-        stock.set_data(training_data[training_data['ticker'] == stock.name])
-    stocks = Stock.stock_list
-    training_data.set_index("date_", inplace=True)
-
-    for genome_id, genome in genomes:
-        genome_portfolio = Portfolio(genome = genome, cash = cash)
-        for current_date in training_data.index.unique():
-            for stock in stocks:
-                net = neat.nn.FeedForwardNetwork.create(genome, config)
-                df = training_data[training_data['ticker'] == stock.name].loc[current_date, ["vol_1", "vol_2", "close_1", "close_2"]]
-                output = net.activate(list(df))
-                decision, proportion = output_to_decision(output[0], threshold=0.05)
-                # currently the models proportion is applied on the remaining cash if buy so that we can never go beyond budget
-                # for sell it is the proportion of the current amount (count) of the stock in the portfolio
-                # another way would be to apply the proportion on the current portfolio value of the stock in question
-                # but then we would have to discourage the behaviour of going beyond budget by reducing the fitness funciton
-                # if genome_portfolio.got_enough_cash returns False
-                if decision == 'buy':
-                    amount = (proportion * genome_portfolio.cash_current) / \
-                             training_data[training_data['ticker'] == stock.name].loc[current_date, "close"]
-                    genome_portfolio.buy(stock = stock, amount = amount, as_of = current_date)
-                elif decision == 'sell':
-                    amount = -1 * ((proportion * genome_portfolio.get_stock_amount(stock)) / \
-                             training_data[training_data['ticker'] == stock.name].loc[current_date, "close"])
-                    genome_portfolio.sell(stock = stock, amount = amount, as_of = current_date)
-                elif not decision:
-                    # do nothing within [0.5-threshold , 0.5+threshold]
-                    pass
-                else:
-                    raise NotImplementedError
-        # fitness = portfolio value at the last date of the training set
-        # other option would be to check the portfolios value at the end of every year:
-        #   - and reduce the initial 500 with the place of the genome compared to the others
-        #   - so if the genome is the best every year it gets 500 - (10 years * 1st place) = 490
-        #   - if it is the 3rd every year then 500 - 10*3 = 470 ...
-        #   - this fitness function would incentivize interim good performance
-        #  We could also consider to terminate if genome.fitness reached a level
-        genome_portfolio.update_total_portfolio_value(as_of = current_date)
-        genome.fitness = genome_portfolio.total_portfolio_value
 
 def output_to_decision(output, threshold):
     """determine the direction (buy/sell) and
@@ -119,3 +124,5 @@ def output_to_decision(output, threshold):
         decision = None
     proportion = abs(output - 0.5)
     return decision, proportion
+
+

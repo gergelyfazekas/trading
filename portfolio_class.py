@@ -119,12 +119,12 @@ class Portfolio:
 
     def update_total_portfolio_value(self, as_of):
         value_per_stock = []
-        if self.balance.last_valid_index():
+        if self.balance.last_valid_index() or self.balance.last_valid_index() == 0:
             for row in range(len(self.balance.index)):
-                ticker = self.balance.iloc[row,self.balance.columns.get_loc('stock_name')]
+                ticker = self.balance.iloc[row, self.balance.columns.get_loc('stock_name')]
                 # check if ticker is np.nan which is a np.float object
                 if not isinstance(ticker, np.float):
-                    amount = self.balance.iloc[row,self.balance.columns.get_loc('amount')]
+                    amount = self.balance.iloc[row, self.balance.columns.get_loc('amount')]
                     current_value = [stock.get_price(as_of) for stock in Stock.stock_list if stock.name == ticker]
                     value_per_stock.append(current_value[0] * amount)
                     self.total_portfolio_value = sum(value_per_stock)
