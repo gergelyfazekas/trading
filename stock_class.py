@@ -135,6 +135,30 @@ class Stock:
             drawn_stocks.append(cls.stock_list[idx])
         return drawn_stocks
 
+    @classmethod
+    def strategy_looper_single_param(cls, strategy_dict):
+        """calculates the strategies for every stock in stock_list and pushes it back to sql (if push_back=True)
+        every strategy should be single parameter so that:
+            if [1,5,10] is given then the strategy is called three times with 1, then 5, then 10 as parameter
+            the strategies are implemented so that a new column is created at each call (see sma_calc)
+
+        arguments:
+        strategy_dict: key is the name of the strategy, value is a list of parameters to calculate
+        push_back: if True push back the extended dataframe to sql
+        """
+        for stock in cls.stock_list:
+            for strategy, params in strategy_dict.items():
+                for param in params:
+                    stock.strategy(param)
+
+    @classmethod
+    def aggregate_data(cls):
+        col_names = cls.stock_list[0].data.columns
+        total_df = pd.DataFrame(columns=col_names)
+        for stock in cls.stock_list:
+            total_df = pd.concat([total_df, stock.data])
+        return total_df
+
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
         if not isinstance(yahoo_data, pd.DataFrame):
