@@ -149,7 +149,7 @@ class Stock:
         for stock in cls.stock_list:
             for strategy, params in strategy_dict.items():
                 for param in params:
-                    stock.strategy(param)
+                    strategy(stock, param)
 
     @classmethod
     def aggregate_data(cls):
