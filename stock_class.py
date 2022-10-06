@@ -79,11 +79,8 @@ class Stock:
             Stock(name=ticker)
 
     @classmethod
-    def create_stock_list_sql(cls, filename="tickers_30.csv"):
-
-        tickers = excel_data['Symbol'].copy()
-        tickers = tickers.values.tolist()
-        for ticker in tickers:
+    def create_stock_list_sql(cls, ticker_list):
+        for ticker in ticker_list:
             Stock(name=ticker)
 
     @classmethod
@@ -225,7 +222,16 @@ class Stock:
 
 
     def sma_calc(self, period=20):
-        self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
+        """calculates simple moving average with window length=period
+        creates a new column for the sma_{period} in self.data
+        if data is too short for given period a ValueError is raised
+        """
+        if len(self.data.index) <= period:
+            raise ValueError(f'len(self.data.index)={len(self.data.index)} is shorter than period={period}')
+        if f'sma_{period}' not in self.data.columns:
+            self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
+        else:
+            print(f'sma_{period} already exists')
 
     def sma_cross(self, sma_short_days, sma_long_days):
         if not f'sma_{sma_long_days}' in self.data.columns:
