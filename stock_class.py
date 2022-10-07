@@ -137,14 +137,14 @@ class Stock:
 
     @classmethod
     def strategy_looper_single_param(cls, strategy_dict):
-        """calculates the strategies for every stock in stock_list and pushes it back to sql (if push_back=True)
+        """calculates the strategies for every stock in stock_list and pushes it back to sql (NOT IMPLEMENTED YET)
         every strategy should be single parameter so that:
             if [1,5,10] is given then the strategy is called three times with 1, then 5, then 10 as parameter
             the strategies are implemented so that a new column is created at each call (see sma_calc)
 
         arguments:
         strategy_dict: key is the name of the strategy, value is a list of parameters to calculate
-        push_back: if True push back the extended dataframe to sql
+        push_back: NOT IMPLEMENTED YET if True push back the extended dataframe to sql
         """
         for stock in cls.stock_list:
             for strategy, params in strategy_dict.items():
@@ -171,6 +171,13 @@ class Stock:
 
     def lowercase(self):
         uppercase_names = self.data.columns
+        # just for debugging
+        i = 0
+        if i == 0:
+            print(uppercase_names)
+            print('AAAAAAAAAAAAAAAAAAA')
+            print(uppercase_names[0])
+            i+=1
         lowercase_names = [old_name.lower() for old_name in self.data.columns]
         self.data.rename(columns=dict(zip(uppercase_names, lowercase_names)), inplace=True)
 
@@ -191,6 +198,7 @@ class Stock:
             pass
 
         self.data.index = pd.to_datetime(self.data.index).date
+        self.data['date_'] = self.data.index.copy()
 
 
     def set_data(self, new_dataframe):
