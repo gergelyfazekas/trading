@@ -152,7 +152,11 @@ class Stock:
         for stock in cls.stock_list:
             for strategy, params in strategy_dict.items():
                 for param in params:
-                    strategy(stock, param)
+                    try:
+                        strategy(stock, param)
+                    except ValueError as err:
+                        print(err)
+                        continue
 
     @classmethod
     def aggregate_data(cls):
@@ -250,7 +254,7 @@ class Stock:
         if data is too short for given period a ValueError is raised
         """
         if len(self.data.index) <= period:
-            raise ValueError(f'len(self.data.index)={len(self.data.index)} is shorter than period={period}')
+            raise ValueError(f'len(self.data.index)={len(self.data.index)} for {self.name} is shorter than period={period}')
         if f'sma_{period}' not in self.data.columns:
             self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
         else:

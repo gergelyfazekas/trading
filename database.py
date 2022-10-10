@@ -348,7 +348,7 @@ def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each
 	"""
 	if not isinstance(sql_table, str):
 		sql_table = str(sql_table)
-	sql_names = get_unique_names_sql(conn, sql_table)
+	sql_names = get_unique_names_sql(conn, sql_table, num_iter=1)
 	if stock_names:
 		sql_names = [ticker for ticker in stock_names if ticker in sql_names]
 	stock_class.Stock.clear_stock_list()
