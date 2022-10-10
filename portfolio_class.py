@@ -14,7 +14,6 @@ from stock_class import Stock
 
 # turn off chained assignment warning
 pd.options.mode.chained_assignment = None
-DATE = datetime.date(2007, 1, 12)
 
 
 class Portfolio:
@@ -204,7 +203,7 @@ class Portfolio:
     def update_number_of_stocks(self):
         self.number_of_stocks = len(self.balance['stock_name'].unique())
 
-    def buy(self, stock, amount, as_of=DATE):
+    def buy(self, stock, amount, as_of):
         if not isinstance(stock, Stock):
             raise TypeError(f'Not Stock instance! type given: {type(stock)}')
         if not isinstance(as_of, datetime.date):
@@ -223,7 +222,7 @@ class Portfolio:
         else:
             raise ValueError('buy requires a positive amount')
 
-    def sell(self, stock, amount, as_of=DATE):
+    def sell(self, stock, amount, as_of):
         if not isinstance(stock, Stock):
             raise TypeError(f'Not Stock instance! type given: {type(stock)}')
         if isinstance(amount, pd.Series):

@@ -271,11 +271,11 @@ def price_query_sql(ticker_name, conn, start_date=datetime.date(1990, 1, 1), end
 	return ticker_df
 
 
-def get_unique_names_sql(conn, sql_table='stock_prices'):
+def get_unique_names_sql(conn, sql_table='stock_prices', num_iter=0):
 	queried_data = conn.execute(f"SELECT DISTINCT ticker FROM {sql_table}").fetchall()
 	# wierd list of sqlalchemy objects has to be turned into a list of lists
 	queried_data = [list(sublist) for sublist in queried_data]
-	unique_names = tuning.flatten(queried_data, num_iter=0)
+	unique_names = tuning.flatten(queried_data, num_iter=num_iter)
 	return unique_names
 
 
@@ -287,24 +287,35 @@ def exists_sql_table(conn, sql_table):
 		return False
 
 
-def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None, sql_table="stock_prices", if_exists="fail"):
+def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None,
+						sql_table="stock_prices", if_exists="fail", verbose=False, stock_csv="tickers_30.csv"):
 	if exists_sql_table(conn, sql_table):
 		pass
 	else:
 		raise KeyError(f'sql_table {sql_table}'
 					   f' not created yet, use create_sql_table and then fill_sql_from_yahoo with append')
-	if start_date is None:
-		last_date = conn.execute(f"SELECT date_ FROM {sql_table} ORDER BY id DESC LIMIT 1").fetchall()
-		start_date = last_date[0][0] + datetime.timedelta(days=1)
-
-	if end_date is None:
-		end_date = start_date + datetime.timedelta(days=length)
-
-	stock_class.Stock.yahoo_pull_start_date = start_date
-	stock_class.Stock.yahoo_pull_end_date = end_date
 
 	stock_class.Stock.clear_stock_list()
-	stock_class.Stock.create_stock_list_from_csv()
+	stock_class.Stock.create_stock_list_from_csv(stock_csv)
+	for stock in stock_class.Stock.stock_list:
+		print(stock.name)
+		if not start_date:
+			last_date_sql = conn.execute(
+				f"SELECT date_ FROM {sql_table} WHERE ticker='{stock.name}' ORDER BY date_ DESC LIMIT 1").fetchall()
+			print('last_Date_sql', last_date_sql)
+			if not last_date_sql:
+				# if ticker not is sql_table the above conn.execute returns []
+				# use default start-end dates
+				print('not found in sql -- default', stock.yahoo_pull_start_date)
+				continue
+			start = last_date_sql[0][0] + datetime.timedelta(days=1)
+		if not end_date:
+			end = start + datetime.timedelta(days=length)
+		if verbose:
+			print(f"{stock.name}: {start_date}:{end_date}")
+		stock.set_yahoo_pull_start_date(start)
+		stock.set_yahoo_pull_end_date(end)
+		print('set_date 1', stock.yahoo_pull_start_date)
 
 	futures = stock_class.Stock.yahoo_pull_data_for_stock_list()
 	# for futures_item in futures:

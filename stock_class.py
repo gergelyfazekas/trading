@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 
 # Constants
+START_DATE = datetime.date(2000, 1, 1)
+END_DATE = datetime.date(2000, 1, 10)
 MAX_WORKERS = 20
 LOOK_AHEAD_RANGE = 31
 PLACEHOLDER = 1000
@@ -18,14 +20,14 @@ PLACEHOLDER = 1000
 class Stock:
     # stock_list contains Stock instances not just names
     stock_list = []
-    yahoo_pull_start_date = datetime.date(2007, 1, 9)
-    yahoo_pull_end_date = datetime.date(2007, 1, 19)
 
     def __init__(self, name):
         # stock related attributes
         self.name = name
         self.data = pd.DataFrame
         self.sector = str
+        self.yahoo_pull_start_date = START_DATE
+        self.yahoo_pull_end_date = END_DATE
         # portfolio related attributes
         self.log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
                                  'amount': [np.nan] * PLACEHOLDER,
@@ -112,7 +114,7 @@ class Stock:
 
     @classmethod
     def pop_no_data_tickers(cls):
-        drop = [name for name in Stock.get_stock_names() if Stock.fetch_stock(name).data.empty]
+        drop = [name for name in cls.get_stock_names() if cls.fetch_stock(name).data.empty]
         cls.stock_list = [item for item in cls.stock_list if not item.data.empty]
         print(f"No data available: {drop}")
 
@@ -121,7 +123,8 @@ class Stock:
         for stock in cls.stock_list:
             if stock.name == name:
                 return stock
-        raise ValueError(f'stock_list does not contain {name}')
+            else:
+                raise KeyError(f'stock_list does not contain {name}')
 
     @classmethod
     def random_sample_stocks(cls, num_draws):
