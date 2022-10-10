@@ -5,7 +5,7 @@ from pandas_datareader import data as wb
 import stock_class
 import tuning
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy import exc
 
 
 def sql_connect_old(host="database-1.c30doxhxuudc.us-east-1.rds.amazonaws.com", user="admin", database="trading_test"):
@@ -45,7 +45,7 @@ def insert_data_into_sql_old(ticker_df, mycursor, db, sql_table="stock_prices"):
 
 
 def price_query_sql_old(ticker_name, mycursor, db, start_date=datetime.date(1990, 1, 1), end_date=datetime.date.today(),
-					sql_table="stock_prices"):
+						sql_table="stock_prices"):
 	start_date = str(start_date)
 	end_date = str(end_date)
 	sql_table = str(sql_table)
@@ -139,6 +139,7 @@ def pull_all_data_sql_old(mycursor, db, sql_table='stock_prices', stock_names=No
 		total_df['date_'] = total_df.index
 		return total_df
 
+
 # currently insert_data_into_sql is used for pushing data to sql
 def push_data_sql_old(df, mycursor, db, sql_table='stock_prices'):
 	"""updates existing sql_table with new columns from df
@@ -202,25 +203,51 @@ def push_data_sql_old(df, mycursor, db, sql_table='stock_prices'):
 
 
 # for messing around
-def sql_execute_old(myc, db, statement, values=None):
+def sql_execute_old(conn, statement, values=None):
 	"""general function executing any sql command for playing around in jupyter notebook"""
-	myc.execute(statement, values)
-	f = myc.fetchall()
-	db.commit()
-	return f
+	if values:
+		return conn.execute(statement, values).fetchall()
+	else:
+		return conn.execute(statement).fetchall()
 
 
 def sql_connect(host="database-1.c30doxhxuudc.us-east-1.rds.amazonaws.com", user="admin", database="trading_test"):
 	passwd = str(input("MySQL database password:"))
 	engine = create_engine(
-			f"mysql+mysqlconnector://{user}:{passwd}@{host}/{database}")
+		f"mysql+mysqlconnector://{user}:{passwd}@{host}/{database}")
 
 	conn = engine.connect()
 	return conn
 
 
 def insert_data_into_sql(df, sql_table, engine, if_exists="fail"):
-	df.to_sql(name=sql_table, con=engine, if_exists=if_exists)
+	df.to_sql(name=sql_table, con=engine, if_exists=if_exists, index=False)
+
+
+def create_sql_table(engine, sql_table, columns):
+	if exists_sql_table(engine, sql_table):
+		raise KeyError(f'sql_table {sql_table}'
+					   f' already exists use fill_sql_from_yahoo/insert_data_into_sql with append')
+
+	for idx, new_col_name in enumerate(columns):
+		if isinstance(df.iloc[0, df.columns.get_loc(new_col_name)], int):
+			new_col_type = 'INT'
+		elif isinstance(df.iloc[0, df.columns.get_loc(new_col_name)], float):
+			new_col_type = 'FLOAT'
+		elif isinstance(df.iloc[0, df.columns.get_loc(new_col_name)], str):
+			new_col_type = 'VARCHAR'
+		elif isinstance(df.iloc[0, df.columns.get_loc(new_col_name)], datetime.date):
+			new_col_type = 'DATE'
+		elif isinstance(df.iloc[0, df.columns.get_loc(new_col_name)], bool):
+			new_col_type = 'BOOLEAN'
+		else:
+			raise TypeError(
+				f'type {type(df.iloc[0, df.columns.get_loc(new_col_name)])} not implemented in push_data_sql')
+
+		if idx == 0:
+			engine.execute(f'CREATE TABLE [IF NOT EXISTS] {sql_table} ({str(new_col_name)} {str(new_col_type)})')
+		else:
+			engine.execute(f'ALTER TABLE {sql_table} ADD {str(new_col_name)} {str(new_col_type)}')
 
 
 def price_query_sql(ticker_name, conn, start_date=datetime.date(1990, 1, 1), end_date=datetime.date.today(),
@@ -233,9 +260,9 @@ def price_query_sql(ticker_name, conn, start_date=datetime.date(1990, 1, 1), end
 	database_columns = [x[0] for x in result.fetchall()]
 
 	quried_data = conn.execute(f'SELECT * FROM {sql_table} '
-					 f'WHERE ticker = "{ticker_name}" '
-					 f'AND date_ BETWEEN "{start_date}" '
-					 f'AND "{end_date}"').fetchall()
+							   f'WHERE ticker = "{ticker_name}" '
+							   f'AND date_ BETWEEN "{start_date}" '
+							   f'AND "{end_date}"').fetchall()
 	ticker_df = pd.DataFrame(data=quried_data, columns=database_columns)
 	ticker_df.loc[:, 'date_'] = pd.to_datetime(ticker_df.loc[:, 'date_'])
 	ticker_df.set_index('date_', inplace=True)
@@ -252,7 +279,20 @@ def get_unique_names_sql(conn, sql_table='stock_prices'):
 	return unique_names
 
 
+def exists_sql_table(conn, sql_table):
+	try:
+		conn.execute(f'SELECT * FROM {sql_table}').fetchall()
+		return True
+	except exc.SQLAlchemyError:
+		return False
+
+
 def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None, sql_table="stock_prices", if_exists="fail"):
+	if exists_sql_table(conn, sql_table):
+		pass
+	else:
+		raise KeyError(f'sql_table {sql_table}'
+					   f' not created yet, use create_sql_table and then fill_sql_from_yahoo with append')
 	if start_date is None:
 		last_date = conn.execute(f"SELECT date_ FROM {sql_table} ORDER BY id DESC LIMIT 1").fetchall()
 		start_date = last_date[0][0] + datetime.timedelta(days=1)
@@ -263,14 +303,22 @@ def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None, sql_tabl
 	stock_class.Stock.yahoo_pull_start_date = start_date
 	stock_class.Stock.yahoo_pull_end_date = end_date
 
+	stock_class.Stock.clear_stock_list()
 	stock_class.Stock.create_stock_list_from_csv()
 
 	futures = stock_class.Stock.yahoo_pull_data_for_stock_list()
-	for futures_item in futures:
-		try:
-			insert_data_into_sql(df=futures_item.result(), sql_table=sql_table, engine=conn, if_exists=if_exists)
-		except KeyError:
-			pass
+	# for futures_item in futures:
+	# 	df = futures_item.result()
+	# 	try:
+	# 		insert_data_into_sql(df=df, sql_table=sql_table, engine=conn, if_exists=if_exists)
+	# 	except KeyError:
+	# 		pass
+	for stock in stock_class.Stock.stock_list:
+		if stock.data.empty:
+			continue
+		stock.lowercase()
+		stock.set_index()
+		insert_data_into_sql(df=stock.data, sql_table=sql_table, engine=conn, if_exists=if_exists)
 
 
 def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each=True, return_whole=True):

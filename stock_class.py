@@ -165,19 +165,10 @@ class Stock:
             raise TypeError('yahoo_data: not pandas.dataframe')
         yahoo_data['ticker'] = self.name
         self.set_data(yahoo_data)
-        self.lowercase()
-        self.set_index()
         return self.data
 
     def lowercase(self):
         uppercase_names = self.data.columns
-        # just for debugging
-        i = 0
-        if i == 0:
-            print(uppercase_names)
-            print('AAAAAAAAAAAAAAAAAAA')
-            print(uppercase_names[0])
-            i+=1
         lowercase_names = [old_name.lower() for old_name in self.data.columns]
         self.data.rename(columns=dict(zip(uppercase_names, lowercase_names)), inplace=True)
 
@@ -188,18 +179,16 @@ class Stock:
                     try:
                         self.data['date_'] = self.data['Date']
                     except KeyError:
-                        raise('No "date_" or "Date" column')
-                    self.data.set_index('date_', inplace=True)
+                        raise ('No "date_" or "Date" column')
                 else:
                     self.data.set_index('date_', inplace=True)
             else:
                 self.data.index.name = 'date_'
-        else:
-            pass
 
         self.data.index = pd.to_datetime(self.data.index).date
         self.data['date_'] = self.data.index.copy()
-
+        self.data.rename(columns={'adj close': 'adj_close'}, inplace=True)
+        self.data.rename(columns={'Adj Close': 'adj_close'}, inplace=True)
 
     def set_data(self, new_dataframe):
         if not isinstance(new_dataframe, pd.DataFrame):
@@ -247,11 +236,10 @@ class Stock:
         # padding 
         if len(label) < len(self.data['close']):
             diff_length = len(self.data['close']) - len(label)
-            padding = np.array([np.nan]*diff_length)
+            padding = np.array([np.nan] * diff_length)
             label.append(list(padding))
 
         self.data[f'label_{method}'] = label
-
 
     def sma_calc(self, period=20):
         """calculates simple moving average with window length=period
@@ -290,7 +278,8 @@ class Stock:
         rs_factor = up_sma / down_sma
         self.data[f'rsi_{lookback}'] = 100 - (100 / (1 + rs_factor))
 
-    def show(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), show_tech_levels = False, **kwargs):
+    def show(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), show_tech_levels=False,
+             **kwargs):
         """kwargs:
         1)tech_width -- own argument determining the width of a tech_level
         2)other kwargs passed to scipy.signal.find_peaks"""
@@ -327,9 +316,9 @@ class Stock:
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
 
-    def get_high_volumes(self, from_date = datetime.date(2000,1,1), to_date= datetime.date.today(),
-                         auto = True,
-                         number = None,
+    def get_high_volumes(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(),
+                         auto=True,
+                         number=None,
                          **kwargs):
         """arguments:
         auto: if True the top 10 volumes plus the find_peaks(volumes, **kwargs) are returned
@@ -368,8 +357,8 @@ class Stock:
             kwargs['rel_height'] = 0.5
 
         data_chunk = self.get_price_range(from_date, to_date)
-        peaks, _ = find_peaks((data_chunk['close']/data_chunk['close'][-1]), **kwargs)
-        troughs, _ = find_peaks((data_chunk['close']/data_chunk['close'][-1]) * (-1), **kwargs)
+        peaks, _ = find_peaks((data_chunk['close'] / data_chunk['close'][-1]), **kwargs)
+        troughs, _ = find_peaks((data_chunk['close'] / data_chunk['close'][-1]) * (-1), **kwargs)
 
         if consider_volume:
             high_vol_df = self.get_high_volumes(from_date, to_date)
@@ -377,10 +366,10 @@ class Stock:
         high_price_df = data_chunk.loc[
             self.data['date_'][np.concatenate((peaks, troughs))],
             ('date_', 'close')
-            ]
+        ]
         if consider_volume:
             unique_dates = high_vol_df['date_'].append(high_price_df['date_'], ignore_index=True)
-            tech_df = data_chunk.loc[unique_dates.drop_duplicates(),('date_', 'close')]
+            tech_df = data_chunk.loc[unique_dates.drop_duplicates(), ('date_', 'close')]
         # if the next price level is within 'tech_width' add it to the ith technical level
         # don't care if added multiple times (later converts tech_levels sublists to min-max values)
         tech_levels = []
@@ -399,5 +388,3 @@ class Stock:
         tech_levels = [[min(sublist[0]), max(sublist[0])] for sublist in tech_levels]
 
         return tech_levels
-
-
