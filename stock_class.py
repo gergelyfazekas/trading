@@ -8,6 +8,7 @@ import database
 import sys
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
+import tuning
 
 # Constants
 START_DATE = datetime.date(2000, 1, 1)
@@ -140,7 +141,7 @@ class Stock:
 
     @classmethod
     def strategy_looper_single_param(cls, strategy_dict):
-        """calculates the strategies for every stock in stock_list and pushes it back to sql (NOT IMPLEMENTED YET)
+        """calculates the strategies for every stock in stock_list
         every strategy should be single parameter so that:
             if [1,5,10] is given then the strategy is called three times with 1, then 5, then 10 as parameter
             the strategies are implemented so that a new column is created at each call (see sma_calc)
@@ -157,6 +158,25 @@ class Stock:
                     except ValueError as err:
                         print(err)
                         continue
+
+    @classmethod
+    def strategy_looper_multi_param(cls, strategy_dict):
+        """calculates the strategies for every stock in stock_list
+        strategies should be multiple keyword argument
+
+        arguments:
+        strategy_dict: a dictionary where the key is the strategy name
+                       and the value is another dictionary with arg:value pairs
+        """
+
+        for stock in cls.stock_list:
+            for strategy, kwargs in strategy_dict.items():
+                try:
+                    strategy(stock, **kwargs)
+                except ValueError as err:
+                    print(err)
+                    continue
+
 
     @classmethod
     def aggregate_data(cls):
@@ -307,8 +327,15 @@ class Stock:
 
         if show_tech_levels:
             tech_levels = self.get_technical_levels(from_date=first_date, to_date=last_date, **kwargs)
-            y_coords = [sum(sublist) / len(sublist) for sublist in tech_levels]
-            plt.hlines(y_coords, xmin=first_date, xmax=last_date)
+            # y_coords is the average of the min and max of that tech_level -- maybe plot rectangle and not avg later
+            # sublist[0] is a list with 2 values min, max
+            y_coords = [(sum(sublist[0]) / len(sublist[0])) for sublist in tech_levels]
+            red_color = [[1,0,0]]*len(tech_levels)
+            # sublist[1] is a number representing the length of the sublist tech level
+            alphas = [min((sublist[1]/10), 1) for sublist in tech_levels]
+            tmp = list(zip(red_color, alphas))
+            red_with_alphas = [tuning.flatten(elem, num_iter=1) for elem in tmp]
+            plt.hlines(y_coords, xmin=first_date, xmax=last_date, colors=red_with_alphas)
         plt.show()
 
     def get_price(self, as_of):
@@ -330,12 +357,12 @@ class Stock:
         """arguments:
         auto: if True the top 10 volumes plus the find_peaks(volumes, **kwargs) are returned
         number: if not None then the top number of volumes are returned from the set found by auto
-        kwargs: passed to scipy.signal.find_peaks()"""
+        kwargs: passed to scipy.signal.find_peaks() especially height because the volume series is centered to 0 """
 
         data_chunk = self.get_price_range(from_date, to_date)
         auto_size = min(10, len(data_chunk['volume']))
         max_dates_idx = pd.Series(data_chunk['volume'].sort_values()[-auto_size:].index)
-        peak_vol_idx, _ = find_peaks(data_chunk['volume'], **kwargs)
+        peak_vol_idx, _ = find_peaks((data_chunk['volume'] / data_chunk['volume'].mean()), **kwargs)
         peak_vol_dates = data_chunk['date_'][peak_vol_idx]
         unique_dates = peak_vol_dates.append(max_dates_idx, ignore_index=True)
         peaks_df = data_chunk.loc[self.data['date_'][unique_dates.drop_duplicates()], ('date_', 'volume')]
@@ -345,7 +372,8 @@ class Stock:
         """kwargs:
         1)tech_width -- own argument determining the width of a level
         2)consider_volume = True
-        2)other kwargs passed to scipy.signal.find_peaks"""
+        3)volume_params: a dictionary passed to scipy.find_peaks in get_high_volumes
+        4)other kwargs passed to scipy.signal.find_peaks"""
         try:
             tech_width = kwargs['tech_width']
             kwargs.pop('tech_width')
@@ -357,23 +385,29 @@ class Stock:
             kwargs.pop('consider_volume')
         except KeyError:
             consider_volume = True
-
+        try:
+            volume_height = kwargs['volume_height']
+            kwargs.pop('volume_height')
+        except KeyError:
+            volume_height = 0
         try:
             kwargs['rel_height']
         except KeyError:
             kwargs['rel_height'] = 0.5
 
         data_chunk = self.get_price_range(from_date, to_date)
-        peaks, _ = find_peaks((data_chunk['close'] / data_chunk['close'][-1]), **kwargs)
-        troughs, _ = find_peaks((data_chunk['close'] / data_chunk['close'][-1]) * (-1), **kwargs)
+        scaled = data_chunk['close'] / data_chunk['close'][-1]
+        peaks, _ = find_peaks(scaled, **kwargs)
+        troughs, _ = find_peaks(scaled * (-1), **kwargs)
 
         if consider_volume:
-            high_vol_df = self.get_high_volumes(from_date, to_date)
+            high_vol_df = self.get_high_volumes(from_date, to_date, **{'height': volume_height})
 
-        high_price_df = data_chunk.loc[
-            self.data['date_'][np.concatenate((peaks, troughs))],
-            ('date_', 'close')
-        ]
+        high_price_df = data_chunk.iloc[
+            np.concatenate((peaks, troughs)), :]
+        high_price_df = high_price_df.loc[:,('date_', 'close')]
+        print('high_price_df',high_price_df)
+
         if consider_volume:
             unique_dates = high_vol_df['date_'].append(high_price_df['date_'], ignore_index=True)
             tech_df = data_chunk.loc[unique_dates.drop_duplicates(), ('date_', 'close')]
@@ -392,6 +426,8 @@ class Stock:
         # dropping empty sublists of tech_levels list-of-lists
         tech_levels = np.array(tech_levels)
         tech_levels = tech_levels[np.nonzero(tech_levels)[0]].tolist()
-        tech_levels = [[min(sublist[0]), max(sublist[0])] for sublist in tech_levels]
+        # tech_levels[i][0] -- min-max y_coord
+        # tech_levels[i][1] -- how many peaks were in that tech_level -- stregth or alpha for plotting
+        tech_levels = [[[min(sublist[0]), max(sublist[0])], len(sublist)] for sublist in tech_levels]
 
         return tech_levels

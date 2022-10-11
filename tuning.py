@@ -42,7 +42,7 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
     for params in combo:
         user_input = []
         for stock in stocks:
-            if not isinstance(params, list):
+            if not isinstance(params, (list, tuple)):
                 params = [params]
             user_input.append(params)
             param_dict = dict(zip(param_space.keys(), params))
