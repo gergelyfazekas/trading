@@ -5,9 +5,10 @@ import random
 import matplotlib.pyplot as plt
 import stock_class
 import numpy as np
+import pandas as pd
 
 
-def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
+def tune_tech_levels(from_date, to_date, stocks, param_space, search="grid"):
     """arguments:
     stocks: a list of Stock instances selected by hand or using Stock.random_sample_stocks() function
     param_space: a dictionary of parameters to tune, key: parameter name, value: list of values to consider
@@ -23,7 +24,6 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
     if search not in ['grid', 'random']:
         raise ValueError('search should be one of "grid", "random"')
 
-
     num_keys = int(len(param_space))
     counter = 1
     combo = list(param_space.values())[0]
@@ -32,7 +32,7 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
         counter += 1
     if len(param_space) > 2:
         for idx in range(len(combo)):
-            combo[idx] = flatten(combo[idx], int(len(param_space)-2))
+            combo[idx] = flatten(combo[idx], int(len(param_space) - 2))
 
     if search == 'random':
         random.shuffle(combo)
@@ -55,6 +55,18 @@ def tune_tech_levels(from_date, to_date, stocks, param_space, search = "grid"):
         result.append(user_input)
     return result
 
+
+def count_good(user_input, keys):
+    """counts the good values returned by tune_tech_levels"""
+    user_good = [elem for elem in user_input if elem[1] == 'g']
+    stripped_g = [lst[0] for lst in user_good]
+    df = pd.DataFrame(stripped_g, columns=keys)
+    result = []
+    for col in df.columns:
+        result.append(df.groupby(col)[col].count())
+    return result
+
+
 def combine_lists(lst1, lst2):
     if len(lst1) >= len(lst2):
         lst1 = lst1 * len(lst2)
@@ -67,6 +79,7 @@ def combine_lists(lst1, lst2):
         lst1 = lst1 * int(len(lst2) / len(lst1))
         return list(zip(lst1, lst2))
 
+
 def flatten(list_of_lists, num_iter):
     if not isinstance(num_iter, int):
         raise ValueError('num_iter should be int')
@@ -74,7 +87,7 @@ def flatten(list_of_lists, num_iter):
         return list_of_lists
     else:
         flat_list = []
-        i=0
+        i = 0
         while i < num_iter:
             if flat_list:
                 list_of_lists = flat_list.copy()
@@ -88,8 +101,5 @@ def flatten(list_of_lists, num_iter):
                 # sublist is actually just a number: [(1,2),3]
                 elif isinstance(sublist, (int, float)):
                     flat_list.append(sublist)
-            i+=1
+            i += 1
         return flat_list
-
-
-

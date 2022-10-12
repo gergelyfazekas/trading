@@ -9,6 +9,7 @@ import sys
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 import tuning
+import math
 
 # Constants
 START_DATE = datetime.date(2000, 1, 1)
@@ -124,8 +125,7 @@ class Stock:
         for stock in cls.stock_list:
             if stock.name == name:
                 return stock
-            else:
-                raise KeyError(f'stock_list does not contain {name}')
+        raise KeyError('stock {name} not in stock_list')
 
     @classmethod
     def random_sample_stocks(cls, num_draws):
@@ -307,7 +307,12 @@ class Stock:
 
     def show(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), show_tech_levels=False,
              **kwargs):
-        """kwargs:
+        """
+        arguments:
+        from_date: datetime.date object determining the left edge of the plot plus the lookback of calculating tech levels
+        to_date: similar to from_date only the other end (most of the time this is set to today)
+        show_tech_levels: if True technical levels are calculated inside the window provided by from_date-to_date
+        kwargs:
         1)tech_width -- own argument determining the width of a tech_level
         2)other kwargs passed to scipy.signal.find_peaks"""
         if not isinstance(from_date, datetime.date):
@@ -332,7 +337,11 @@ class Stock:
             y_coords = [(sum(sublist[0]) / len(sublist[0])) for sublist in tech_levels]
             red_color = [[1,0,0]]*len(tech_levels)
             # sublist[1] is a number representing the length of the sublist tech level
-            alphas = [min((sublist[1]/10), 1) for sublist in tech_levels]
+            # alphas = [min((sublist[1]/10), 1) for sublist in tech_levels]
+            alphas = [sublist[1] for sublist in tech_levels]
+            medium = [i for i in range(len(alphas)) if alphas[i] == 0.5]
+            for elem in medium:
+                red_color[elem] = [0,0,1]
             tmp = list(zip(red_color, alphas))
             red_with_alphas = [tuning.flatten(elem, num_iter=1) for elem in tmp]
             plt.hlines(y_coords, xmin=first_date, xmax=last_date, colors=red_with_alphas)
@@ -357,7 +366,8 @@ class Stock:
         """arguments:
         auto: if True the top 10 volumes plus the find_peaks(volumes, **kwargs) are returned
         number: if not None then the top number of volumes are returned from the set found by auto
-        kwargs: passed to scipy.signal.find_peaks() especially height because the volume series is centered to 0 """
+        kwargs: passed to scipy.signal.find_peaks():
+                height because the volume series is centered to 0 """
 
         data_chunk = self.get_price_range(from_date, to_date)
         auto_size = min(10, len(data_chunk['volume']))
@@ -372,14 +382,14 @@ class Stock:
         """kwargs:
         1)tech_width -- own argument determining the width of a level
         2)consider_volume = True
-        3)volume_params: a dictionary passed to scipy.find_peaks in get_high_volumes
-        4)other kwargs passed to scipy.signal.find_peaks"""
+        3) volume_height -- this argument is used as the height parameter for find_peaks in get_high_volumes
+        4)other kwargs passed to scipy.signal.find_peaks
+            """
         try:
             tech_width = kwargs['tech_width']
             kwargs.pop('tech_width')
         except KeyError:
             tech_width = 0.005
-
         try:
             consider_volume = kwargs['consider_volume']
             kwargs.pop('consider_volume')
@@ -391,6 +401,11 @@ class Stock:
         except KeyError:
             volume_height = 0
         try:
+            volume_prominence = kwargs['volume_prominence']
+            kwargs.pop('volume_prominence')
+        except KeyError:
+            volume_prominence = 0
+        try:
             kwargs['rel_height']
         except KeyError:
             kwargs['rel_height'] = 0.5
@@ -401,12 +416,12 @@ class Stock:
         troughs, _ = find_peaks(scaled * (-1), **kwargs)
 
         if consider_volume:
-            high_vol_df = self.get_high_volumes(from_date, to_date, **{'height': volume_height})
+            high_vol_df = self.get_high_volumes(from_date, to_date, **{'height': volume_height,
+                                                                       'prominence': volume_prominence})
 
         high_price_df = data_chunk.iloc[
             np.concatenate((peaks, troughs)), :]
         high_price_df = high_price_df.loc[:,('date_', 'close')]
-        print('high_price_df',high_price_df)
 
         if consider_volume:
             unique_dates = high_vol_df['date_'].append(high_price_df['date_'], ignore_index=True)
@@ -428,6 +443,9 @@ class Stock:
         tech_levels = tech_levels[np.nonzero(tech_levels)[0]].tolist()
         # tech_levels[i][0] -- min-max y_coord
         # tech_levels[i][1] -- how many peaks were in that tech_level -- stregth or alpha for plotting
-        tech_levels = [[[min(sublist[0]), max(sublist[0])], len(sublist)] for sublist in tech_levels]
+        # rounding is done so that 0,1: 0 -- 2,3: 0.5 -- 4,5,6,7,8,9,10,...: 1
+        tech_levels = [[[min(sublist[0]), max(sublist[0])],
+                        0 if len(sublist) in [0,1] else 0.5 if len(sublist) in [2] else 1] for sublist in tech_levels]
+                        # math.ceil(min(len(sublist)/10,1)+0.2 * 2)/2] for sublist in tech_levels]
 
         return tech_levels
