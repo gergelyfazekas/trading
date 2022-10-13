@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import stock_class
 import numpy as np
 import pandas as pd
+from statsmodels.tsa.stattools import adfuller
 
 
 def tune_tech_levels(from_date, to_date, stocks, param_space, search="grid"):
@@ -103,3 +104,44 @@ def flatten(list_of_lists, num_iter):
                     flat_list.append(sublist)
             i += 1
         return flat_list
+
+
+def stationary_maker(input_series, p_val=0.05, maxlag=5):
+    """makes an input_series stationary by differencing no more than 2 times and retruns the stationary series
+
+    stationarity is checked with adfuller test using p_val as threshold
+    H0: potetntial unit root / non-stationary -- test statistic >= p_val
+    H1: no unit root / is stationary -- test statistic < p_val
+
+    accepts list and pd.Series as input_series
+    """
+    if isinstance(input_series, (pd.DataFrame, pd.Series)):
+        if adfuller(input_series, maxlag=maxlag)[1] < p_val:
+            return input_series
+        elif adfuller(input_series, maxlag=maxlag)[1] >= p_val:
+            first_diff = input_series.diff().dropna()
+            if adfuller(first_diff, maxlag=maxlag)[1] < p_val:
+                return first_diff
+            elif adfuller(first_diff, maxlag=maxlag)[1] >= p_val:
+                second_diff = first_diff.diff().dropna()
+                return second_diff
+
+    elif isinstance(input_series, list):
+        input_series = pd.Series(input_series)
+        stationary_maker(input_series, p_val)
+    else:
+        raise TypeError(f"invalid type {type(input_series)}")
+
+
+def closest_number(num, lst):
+    """returns the element from lst closest (in absolute value) to num"""
+    try:
+        if isinstance(lst[0], (tuple, list)):
+            lst = flatten(lst, 1)
+    except IndexError:
+        return None
+    curr = lst[0]
+    for elem in lst:
+        if abs(num-elem) < abs(num-curr):
+            curr = elem
+    return curr

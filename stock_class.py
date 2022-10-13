@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 import tuning
 import math
+from statsmodels.tsa.stattools import adfuller
 
 # Constants
 START_DATE = datetime.date(2000, 1, 1)
@@ -329,6 +330,7 @@ class Stock:
         first_date = chunk.first_valid_index()
         last_date = chunk.last_valid_index()
         plt.plot(chunk['close'])
+        plt.title(self.name)
 
         if show_tech_levels:
             tech_levels = self.get_technical_levels(from_date=first_date, to_date=last_date, **kwargs)
@@ -369,10 +371,25 @@ class Stock:
         kwargs: passed to scipy.signal.find_peaks():
                 height because the volume series is centered to 0 """
 
+        try:
+            height = kwargs['height']
+        except KeyError:
+            height = 0
+        # prepare data chunk
         data_chunk = self.get_price_range(from_date, to_date)
         auto_size = min(10, len(data_chunk['volume']))
         max_dates_idx = pd.Series(data_chunk['volume'].sort_values()[-auto_size:].index)
-        peak_vol_idx, _ = find_peaks((data_chunk['volume'] / data_chunk['volume'].mean()), **kwargs)
+        # convert to stationary
+        stationary_volume = tuning.stationary_maker(data_chunk['volume'])
+        # center
+        centered_volume = stationary_volume - stationary_volume.mean()
+        # height of peaks in standard deviation units
+        st_dev = centered_volume.std()
+        height_in_st_dev = height * st_dev
+        kwargs['height'] = height_in_st_dev
+
+        # find peaks
+        peak_vol_idx, _ = find_peaks(centered_volume, **kwargs)
         peak_vol_dates = data_chunk['date_'][peak_vol_idx]
         unique_dates = peak_vol_dates.append(max_dates_idx, ignore_index=True)
         peaks_df = data_chunk.loc[self.data['date_'][unique_dates.drop_duplicates()], ('date_', 'volume')]
@@ -382,7 +399,7 @@ class Stock:
         """kwargs:
         1)tech_width -- own argument determining the width of a level
         2)consider_volume = True
-        3) volume_height -- this argument is used as the height parameter for find_peaks in get_high_volumes
+        3) volume_height -- used as the height param for find_peaks in get_high_volumes, suggested range: 0,2
         4)other kwargs passed to scipy.signal.find_peaks
             """
         try:
@@ -449,3 +466,47 @@ class Stock:
                         # math.ceil(min(len(sublist)/10,1)+0.2 * 2)/2] for sublist in tech_levels]
 
         return tech_levels
+
+
+    def tech_levels_to_input(self, current_date, lookback, **kwargs):
+        """returns the distance from the closest strong and medium tech levels
+        tech levels are calculated based on a [current_date - lookback, current_date] window
+        kwargs: passed to get_technical_levels
+        """
+        fr = current_date - datetime.timedelta(days=lookback)
+        tech_levels = self.get_technical_levels(from_date=fr, to_date=current_date)
+        # strong_list and medium_list contain tuples of min-max values for each tech_level
+        # to check if current_price between min and max for one tech_level convert to range
+        strong_list = [tech_level[0] for tech_level in tech_levels if tech_level[1] == 1]
+        medium_list = [tech_level[0] for tech_level in tech_levels if tech_level[1] == 0.5]
+        current_price = self.get_price(as_of=current_date)
+
+        # positive distance: current price greater than tech level
+        # negative distance: current price smaller than tech level
+        # zero distance: within a tech level
+        strong_distance = [0 for s in strong_list if current_price in range(round(s[0]), round(s[1]))]
+        medium_distance = [0 for m in medium_list if current_price in range(round(m[0]), round(m[1]))]
+
+        if strong_distance:
+            strong_distance_percent = 0
+        else:
+            try:
+                strong_distance = current_price - tuning.closest_number(current_price, strong_list)
+                strong_distance_percent = strong_distance / current_price
+            except TypeError:
+                if tuning.closest_number(current_price, strong_list) is None:
+                    strong_distance_percent = None
+
+        if medium_distance:
+            medium_distance_percent = 0
+        else:
+            try:
+                medium_distance = current_price - tuning.closest_number(current_price, medium_list)
+                medium_distance_percent = medium_distance / current_price
+            except TypeError:
+                if tuning.closest_number(current_price, medium_list) is None:
+                    medium_distance_percent = None
+
+        return strong_distance_percent, medium_distance_percent
+
+
