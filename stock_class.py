@@ -178,7 +178,6 @@ class Stock:
                     print(err)
                     continue
 
-
     @classmethod
     def aggregate_data(cls):
         col_names = cls.stock_list[0].data.columns
@@ -275,7 +274,8 @@ class Stock:
         if data is too short for given period a ValueError is raised
         """
         if len(self.data.index) <= period:
-            raise ValueError(f'len(self.data.index)={len(self.data.index)} for {self.name} is shorter than period={period}')
+            raise ValueError(
+                f'len(self.data.index)={len(self.data.index)} for {self.name} is shorter than period={period}')
         if f'sma_{period}' not in self.data.columns:
             self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
         else:
@@ -333,17 +333,17 @@ class Stock:
         plt.title(self.name)
 
         if show_tech_levels:
-            tech_levels = self.get_technical_levels(from_date=first_date, to_date=last_date, **kwargs)
+            tech_levels = self.get_tech_levels(from_date=first_date, to_date=last_date, **kwargs)
             # y_coords is the average of the min and max of that tech_level -- maybe plot rectangle and not avg later
             # sublist[0] is a list with 2 values min, max
             y_coords = [(sum(sublist[0]) / len(sublist[0])) for sublist in tech_levels]
-            red_color = [[1,0,0]]*len(tech_levels)
+            red_color = [[1, 0, 0]] * len(tech_levels)
             # sublist[1] is a number representing the length of the sublist tech level
             # alphas = [min((sublist[1]/10), 1) for sublist in tech_levels]
             alphas = [sublist[1] for sublist in tech_levels]
             medium = [i for i in range(len(alphas)) if alphas[i] == 0.5]
             for elem in medium:
-                red_color[elem] = [0,0,1]
+                red_color[elem] = [0, 0, 1]
             tmp = list(zip(red_color, alphas))
             red_with_alphas = [tuning.flatten(elem, num_iter=1) for elem in tmp]
             plt.hlines(y_coords, xmin=first_date, xmax=last_date, colors=red_with_alphas)
@@ -391,11 +391,12 @@ class Stock:
         # find peaks
         peak_vol_idx, _ = find_peaks(centered_volume, **kwargs)
         peak_vol_dates = data_chunk['date_'][peak_vol_idx]
-        unique_dates = peak_vol_dates.append(max_dates_idx, ignore_index=True)
+        # unique_dates = peak_vol_dates.append(max_dates_idx, ignore_index=True)
+        unique_dates = pd.concat([peak_vol_dates, max_dates_idx], ignore_index=True)
         peaks_df = data_chunk.loc[self.data['date_'][unique_dates.drop_duplicates()], ('date_', 'volume')]
         return peaks_df
 
-    def get_technical_levels(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), **kwargs):
+    def get_tech_levels(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today(), **kwargs):
         """kwargs:
         1)tech_width -- own argument determining the width of a level
         2)consider_volume = True
@@ -437,11 +438,11 @@ class Stock:
                                                                        'prominence': volume_prominence})
 
         high_price_df = data_chunk.iloc[
-            np.concatenate((peaks, troughs)), :]
-        high_price_df = high_price_df.loc[:,('date_', 'close')]
+                        np.concatenate((peaks, troughs)), :]
+        high_price_df = high_price_df.loc[:, ('date_', 'close')]
 
         if consider_volume:
-            unique_dates = high_vol_df['date_'].append(high_price_df['date_'], ignore_index=True)
+            unique_dates = pd.concat([high_vol_df['date_'] ,high_price_df['date_']], ignore_index=True)
             tech_df = data_chunk.loc[unique_dates.drop_duplicates(), ('date_', 'close')]
         # if the next price level is within 'tech_width' add it to the ith technical level
         # don't care if added multiple times (later converts tech_levels sublists to min-max values)
@@ -453,28 +454,25 @@ class Stock:
                 if abs(tech_df.iloc[i, close_column_idx] -
                        tech_df.iloc[k, close_column_idx]) \
                         < tech_width * tech_df.iloc[i, close_column_idx]:
-                    tech_levels[i].append(tech_df.iloc[[i, k], close_column_idx])
+                    tech_levels[i].extend(list(tech_df.iloc[[i, k], close_column_idx]))
 
         # dropping empty sublists of tech_levels list-of-lists
-        tech_levels = np.array(tech_levels)
-        tech_levels = tech_levels[np.nonzero(tech_levels)[0]].tolist()
+        tech_levels = [elem for elem in tech_levels if elem]
+
         # tech_levels[i][0] -- min-max y_coord
         # tech_levels[i][1] -- how many peaks were in that tech_level -- stregth or alpha for plotting
         # rounding is done so that 0,1: 0 -- 2,3: 0.5 -- 4,5,6,7,8,9,10,...: 1
-        tech_levels = [[[min(sublist[0]), max(sublist[0])],
-                        0 if len(sublist) in [0,1] else 0.5 if len(sublist) in [2] else 1] for sublist in tech_levels]
-                        # math.ceil(min(len(sublist)/10,1)+0.2 * 2)/2] for sublist in tech_levels]
-
+        tech_levels = [[[min(sublist), max(sublist)],
+                        0 if len(sublist) in [0, 1] else 0.5 if len(sublist) in [2] else 1] for sublist in tech_levels]
         return tech_levels
-
 
     def tech_levels_to_input(self, current_date, lookback, **kwargs):
         """returns the distance from the closest strong and medium tech levels
         tech levels are calculated based on a [current_date - lookback, current_date] window
-        kwargs: passed to get_technical_levels
+        kwargs: passed to get_tech_levels
         """
         fr = current_date - datetime.timedelta(days=lookback)
-        tech_levels = self.get_technical_levels(from_date=fr, to_date=current_date)
+        tech_levels = self.get_tech_levels(from_date=fr, to_date=current_date, **kwargs)
         # strong_list and medium_list contain tuples of min-max values for each tech_level
         # to check if current_price between min and max for one tech_level convert to range
         strong_list = [tech_level[0] for tech_level in tech_levels if tech_level[1] == 1]
@@ -509,4 +507,47 @@ class Stock:
 
         return strong_distance_percent, medium_distance_percent
 
+    def tech_level_input_calc(self, lookback, init_size=50, verbose=False, **kwargs):
+        """calculates tech_levels_to_input for one stock for the training data with daily iteration
+        
+        calls tech_levels_to_input within a daily loop looking only backwards
+        generates the x variable for every day that can be used in the forecast model
+        
+        
+        arguments:
+        lookback: window size for calculating the technical levels, passed to tech_levels_to_input and get_tech_levels
+        init_size: the size of the data chunk below which no technical levels are calculated, default = 50
+        verbose: print stuff
+        """
+        if 'tech_strong' not in self.data.columns:
+            self.data['tech_strong'] = np.nan
+        else:
+            user_input = str(input(f'{self.name} already has tech_strong. Want to overwrite: y/n'))
+            if user_input.upper() in ['Y', 'YES']:
+                pass
+            else:
+                print(f'None returned for {self.name}')
+                return None
+        if 'tech_medium' not in self.data.columns:
+            self.data['tech_medium'] = np.nan
+        else:
+            user_input = str(input(f'{self.name} already has tech_medium. Want to overwrite: y/n'))
+            if user_input.upper() in ['Y', 'YES']:
+                pass
+            else:
+                print(f'None returned for {self.name}')
+                return None
+
+        for row in range(init_size, len(self.data.index)):
+            current_date = self.data.index[row]
+            if verbose:
+                print('current_date', current_date)
+                print('before', self.data.loc[current_date, ['tech_strong', 'tech_medium']])
+            # unpack tech_levels_to_input and fill self.data['tech_strong', 'tech_medium']
+            self.data.loc[current_date, 'tech_strong'], \
+            self.data.loc[current_date, 'tech_medium'] \
+                = self.tech_levels_to_input(current_date, lookback, **kwargs)
+            if verbose:
+                print('after', self.data.loc[current_date, ['tech_strong', 'tech_medium']])
+                print(" - - - - - - - - - - - ")
 
