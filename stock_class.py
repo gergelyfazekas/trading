@@ -232,8 +232,7 @@ class Stock:
     def set_yahoo_pull_end_date(self, new_date):
         self.yahoo_pull_end_date = new_date
 
-    def labeling_function(self, method='minmax'):
-        look_ahead_range = LOOK_AHEAD_RANGE
+    def labeling_function(self, look_ahead_range=10, method='minmax'):
         label = []
 
         if method not in ['minmax', 'max', 'avg']:
@@ -266,7 +265,12 @@ class Stock:
             padding = np.array([np.nan] * diff_length)
             label.append(list(padding))
 
-        self.data[f'label_{method}'] = label
+        if f'label_{method}' in self.data.columns:
+            user_input = str(input(f'label_{method} already in {self.name}.data, want to replace: y/n'))
+            if user_input.upper() in ['YES', 'Y']:
+                self.data[f'label_{method}'] = label
+        else:
+            self.data[f'label_{method}'] = label
 
     def sma_calc(self, period=20):
         """calculates simple moving average with window length=period
@@ -442,7 +446,7 @@ class Stock:
         high_price_df = high_price_df.loc[:, ('date_', 'close')]
 
         if consider_volume:
-            unique_dates = pd.concat([high_vol_df['date_'] ,high_price_df['date_']], ignore_index=True)
+            unique_dates = pd.concat([high_vol_df['date_'], high_price_df['date_']], ignore_index=True)
             tech_df = data_chunk.loc[unique_dates.drop_duplicates(), ('date_', 'close')]
         # if the next price level is within 'tech_width' add it to the ith technical level
         # don't care if added multiple times (later converts tech_levels sublists to min-max values)
@@ -467,7 +471,9 @@ class Stock:
         return tech_levels
 
     def tech_levels_to_input(self, current_date, lookback, **kwargs):
-        """returns the distance from the closest strong and medium tech levels
+        """returns the distance from the closest strong and medium tech levels for one date
+        for the looper version see tech_level_input_calc
+
         tech levels are calculated based on a [current_date - lookback, current_date] window
         kwargs: passed to get_tech_levels
         """
@@ -551,3 +557,42 @@ class Stock:
                 print('after', self.data.loc[current_date, ['tech_strong', 'tech_medium']])
                 print(" - - - - - - - - - - - ")
 
+    def generate_forecast(self, label_str, method, skip_cols, init_size=200, verbose=False, **kwargs):
+        """Generates forecast for the next day with fitting the regressor to a growing lice of the data
+
+        label_str: the name of the label as a string
+        method: one function from forecast.py
+        init_size: the first prediction is estimated for init_size + 1
+        skip_cols: column names not to use in fitting as a string or list of strings
+        **kwargs: passed to the selected method
+        """
+        if 'forecast' not in self.data.columns:
+            self.data['forecast'] = np.nan
+
+        if 'forecast' not in skip_cols:
+            skip_cols.append('forecast')
+
+
+        for row in range(init_size, len(self.data.index)):
+            current_date = self.data.index[row]
+            if verbose:
+                print('current_date', current_date)
+
+            # relevant_data only contains the X,y pairs needed for fitting and forecasting
+            relevant_data = self.data.drop(skip_cols, axis=1)
+            if verbose:
+                print('columns used for fitting', relevant_data.columns)
+            training_data = relevant_data.loc[:current_date,:]
+
+            # fitting the model
+            model = method(training_data, label_str, **kwargs)
+            # forecast
+            # new observation for current_date+1 without the label y
+            forecast_date = self.data.index[row + 1]
+            new_observation_X = relevant_data.loc[forecast_date, relevant_data.columns != label_str]
+            # reshape so that one sample is represented as a 2D array
+            new_observation_X = np.array(new_observation_X)
+            new_observation_X = new_observation_X.reshape(1,-1)
+
+            prediction = model.predict(new_observation_X)
+            self.data.loc[forecast_date, 'forecast'] = prediction
