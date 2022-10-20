@@ -572,7 +572,6 @@ class Stock:
         if 'forecast' not in skip_cols:
             skip_cols.append('forecast')
 
-
         for row in range(init_size, len(self.data.index)):
             current_date = self.data.index[row]
             if verbose:
@@ -582,17 +581,21 @@ class Stock:
             relevant_data = self.data.drop(skip_cols, axis=1)
             if verbose:
                 print('columns used for fitting', relevant_data.columns)
-            training_data = relevant_data.loc[:current_date,:]
+            training_data = relevant_data.loc[:current_date, :]
 
             # fitting the model
             model = method(training_data, label_str, **kwargs)
             # forecast
             # new observation for current_date+1 without the label y
-            forecast_date = self.data.index[row + 1]
-            new_observation_X = relevant_data.loc[forecast_date, relevant_data.columns != label_str]
-            # reshape so that one sample is represented as a 2D array
-            new_observation_X = np.array(new_observation_X)
-            new_observation_X = new_observation_X.reshape(1,-1)
+            try:
+                forecast_date = self.data.index[row + 1]
+                new_observation_X = relevant_data.loc[forecast_date, relevant_data.columns != label_str]
+                # reshape so that one sample is represented as a 2D array
+                new_observation_X = np.array(new_observation_X)
+                new_observation_X = new_observation_X.reshape(1, -1)
 
-            prediction = model.predict(new_observation_X)
-            self.data.loc[forecast_date, 'forecast'] = prediction
+                prediction = model.predict(new_observation_X)
+                self.data.loc[forecast_date, 'forecast'] = prediction
+            except IndexError:
+                return model
+
