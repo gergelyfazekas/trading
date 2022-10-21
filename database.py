@@ -220,7 +220,10 @@ def sql_connect(host="database-1.c30doxhxuudc.us-east-1.rds.amazonaws.com", user
 	return conn
 
 
-def insert_data_into_sql(df, sql_table, engine, if_exists="fail"):
+def insert_data_into_sql(df, engine, sql_table="stock_prices", if_exists="fail"):
+	"""main function for pushing dataframe into sql
+
+	either aggregate the data to a total_df and use if_exists='replace' or append stock by stock"""
 	df.to_sql(name=sql_table, con=engine, if_exists=if_exists, index=False)
 
 

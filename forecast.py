@@ -6,6 +6,9 @@ from sklearn.ensemble import RandomForestRegressor
 import xgboost as xgb
 
 
+def ols(training_data, label_str):
+    pass
+
 def random_forest_sklearn(training_data, label_str, n_estimators=20,min_samples_leaf=20, n_jobs=-2, **kwargs):
     """See kwargs at https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html"""
     model = RandomForestRegressor(n_estimators=n_estimators, min_samples_leaf=min_samples_leaf, n_jobs=n_jobs, **kwargs)

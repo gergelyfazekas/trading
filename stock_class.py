@@ -13,8 +13,8 @@ import math
 from statsmodels.tsa.stattools import adfuller
 
 # Constants
-START_DATE = datetime.date(2000, 1, 1)
-END_DATE = datetime.date(2000, 1, 10)
+START_DATE = datetime.date(1990, 1, 1)
+END_DATE = datetime.date(2020, 1, 1)
 MAX_WORKERS = 20
 LOOK_AHEAD_RANGE = 31
 PLACEHOLDER = 1000
@@ -186,6 +186,41 @@ class Stock:
             total_df = pd.concat([total_df, stock.data])
         return total_df
 
+    @classmethod
+    def generate_ranking(cls):
+        first_date = datetime.date.today()
+        last_date = datetime.date(2000, 1, 1)
+        for stock in cls.stock_list:
+            stock.set_dates()
+            if stock.first_date < first_date:
+                first_date = stock.first_date
+            if stock.last_date > last_date:
+                last_date = stock.last_date
+        total_df = cls.aggregate_data()
+
+        if 'ranking' not in total_df.columns:
+            total_df['ranking'] = np.nan
+        else:
+            user_input = str(input('ranking already exists, wnat to overwrite: y/n'))
+            if user_input.upper() in ['YES', 'Y']:
+                pass
+            else:
+                raise InterruptedError
+
+        for current_date in total_df.index.unique():
+            if any(pd.isna(total_df.loc[total_df.index == current_date, 'forecast'])):
+                total_df.loc[current_date, 'ranking'] = np.nan
+            else:
+                try:
+                    total_df.loc[current_date, 'ranking'] = total_df.loc[current_date, 'forecast'].rank()
+                except AttributeError:
+                    total_df.loc[current_date, 'ranking'] = 1
+
+        for stock in cls.stock_list:
+            stock.set_data(total_df.loc[total_df['ticker'] == stock.name])
+            stock.lowercase()
+            stock.set_index()
+
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
         if not isinstance(yahoo_data, pd.DataFrame):
@@ -222,6 +257,15 @@ class Stock:
             print(new_dataframe)
             raise TypeError('new_dataframe: not pandas.dataframe')
         self.data = new_dataframe
+
+    def set_dates(self):
+        if all([isinstance(self.data.index[0], datetime.date), isinstance(self.data.index[-1], datetime.date)]):
+            self.first_date = self.data.index[0]
+            self.last_date = self.data.index[-1]
+        else:
+            print(f'type of first_date/last_date is {type(self.data.index[0])}, use set_index and repeat set_dates')
+            self.first_date = self.data.index[0]
+            self.last_date = self.data.index[-1]
 
     def set_sector(self):
         pass
@@ -566,6 +610,9 @@ class Stock:
         skip_cols: column names not to use in fitting as a string or list of strings
         **kwargs: passed to the selected method
         """
+        if verbose:
+            print(self.name)
+
         if 'forecast' not in self.data.columns:
             self.data['forecast'] = np.nan
 
@@ -598,4 +645,3 @@ class Stock:
                 self.data.loc[forecast_date, 'forecast'] = prediction
             except IndexError:
                 return model
-
