@@ -221,6 +221,52 @@ class Stock:
             stock.lowercase()
             stock.set_index()
 
+    @classmethod
+    def ranking_to_dummy(cls, threshold1=5, threshold2=10, threshold3=15):
+        """turns ranking into dummy variables for all stocks in stock_list based on <= thresholds
+           the new columns in stock.data are named as cat_1, cat_2, cat_3
+        args:
+        threshold: int,
+
+        at the moment it is hard-coded to 3 different dummies (the 4th is left out):
+            -being lower than threshold1
+            -between threshold1 and 2
+            -between 2 and 3
+            -else
+        e.g. 5, 10, 20 means that we differentiate top_5, top_5_to_10, top_10_to_20 and all other
+        """
+        if threshold3:
+            num_stocks_per_day = cls.get_stocks_per_date()['len_ticker'].min()
+            if num_stocks_per_day <= threshold3:
+                raise ValueError(f'thresholds do not differentiate {num_stocks_per_day} stocks')
+
+        for stock in cls.stock_list:
+            if 'ranking' not in stock.data.columns:
+                raise KeyError('ranking not available, use generate_ranking first')
+            else:
+                # df.between is inclusive by default on both sides, e.g. 0 <= stock.data['ranking'] <= threshold1
+                if threshold1:
+                    stock.data['cat_1'] = np.where(stock.data['ranking'].between(0, threshold1), 1, 0)
+                    stock.data['cat_1'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
+                if threshold2:
+                    stock.data['cat_2'] = np.where(stock.data['ranking'].between(threshold1, threshold2), 1, 0)
+                    stock.data['cat_2'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
+                if threshold3:
+                    stock.data['cat_3'] = np.where(stock.data['ranking'].between(threshold2, threshold3), 1, 0)
+                    stock.data['cat_3'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
+
+
+    @classmethod
+    def get_stocks_per_date(cls, verbose=False):
+        total_df = cls.aggregate_data()
+        if verbose:
+            print('total_df', total_df)
+        df1 = pd.DataFrame(total_df.groupby('date_')['ticker'].apply(lambda x: len(x)))
+        df1.rename(columns={'ticker':'len_ticker'}, inplace=True)
+        df2 = pd.DataFrame(total_df.groupby('date_')['ticker'].apply(list))
+        return pd.concat([df1,df2], axis=1)
+
+
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
         if not isinstance(yahoo_data, pd.DataFrame):
@@ -645,3 +691,5 @@ class Stock:
                 self.data.loc[forecast_date, 'forecast'] = prediction
             except IndexError:
                 return model
+
+
