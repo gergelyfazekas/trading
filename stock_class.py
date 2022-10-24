@@ -187,7 +187,13 @@ class Stock:
         return total_df
 
     @classmethod
-    def generate_ranking(cls):
+    def generate_ranking(cls, true_ranking=False, label_name='label_minmax'):
+        """generates ranking for all stocks in stock_list for every day
+        args:
+        true_ranking: if True, calculates the ranking based on the true label and not the forecast
+        label_name: one of 'label_minmax', label_max', 'label_avg', only used if true_ranking is True
+        """
+
         first_date = datetime.date.today()
         last_date = datetime.date(2000, 1, 1)
         for stock in cls.stock_list:
@@ -201,32 +207,51 @@ class Stock:
         if 'ranking' not in total_df.columns:
             total_df['ranking'] = np.nan
         else:
-            user_input = str(input('ranking already exists, wnat to overwrite: y/n'))
+            user_input = str(input('ranking already exists, want to overwrite: y/n'))
             if user_input.upper() in ['YES', 'Y']:
                 pass
             else:
                 raise InterruptedError
+        if true_ranking:
+            if 'true_ranking' not in total_df.columns:
+                total_df['true_ranking'] = np.nan
+            else:
+                user_input = str(input('true_ranking already exists, want to overwrite: y/n'))
+                if user_input.upper() in ['YES', 'Y']:
+                    pass
+                else:
+                    raise InterruptedError
 
         for current_date in total_df.index.unique():
             if any(pd.isna(total_df.loc[total_df.index == current_date, 'forecast'])):
                 total_df.loc[current_date, 'ranking'] = np.nan
             else:
                 try:
-                    total_df.loc[current_date, 'ranking'] = total_df.loc[current_date, 'forecast'].rank()
+                    total_df.loc[current_date, 'ranking'] = total_df.loc[current_date, 'forecast'].rank(ascending=False)
                 except AttributeError:
                     total_df.loc[current_date, 'ranking'] = 1
+            if true_ranking:
+                if any(pd.isna(total_df.loc[total_df.index == current_date, label_name])):
+                    total_df.loc[current_date, 'true_ranking'] = np.nan
+                else:
+                    try:
+                        total_df.loc[current_date, 'true_ranking'] = total_df.loc[current_date, label_name].rank(ascending=False)
+                    except AttributeError:
+                        total_df.loc[current_date, 'true_ranking'] = 1
 
         for stock in cls.stock_list:
             stock.set_data(total_df.loc[total_df['ticker'] == stock.name])
             stock.lowercase()
             stock.set_index()
 
+
     @classmethod
-    def ranking_to_dummy(cls, threshold1=5, threshold2=10, threshold3=15):
+    def ranking_to_dummy(cls, threshold1=5, threshold2=10, threshold3=15, true_ranking=False):
         """turns ranking into dummy variables for all stocks in stock_list based on <= thresholds
            the new columns in stock.data are named as cat_1, cat_2, cat_3
         args:
         threshold: int,
+        true_ranking: if True, generate dummy from true_ranking
 
         at the moment it is hard-coded to 3 different dummies (the 4th is left out):
             -being lower than threshold1
@@ -245,6 +270,7 @@ class Stock:
                 raise KeyError('ranking not available, use generate_ranking first')
             else:
                 # df.between is inclusive by default on both sides, e.g. 0 <= stock.data['ranking'] <= threshold1
+                # df.mask changes the values of the column where the condition is True
                 if threshold1:
                     stock.data['cat_1'] = np.where(stock.data['ranking'].between(0, threshold1), 1, 0)
                     stock.data['cat_1'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
@@ -254,6 +280,19 @@ class Stock:
                 if threshold3:
                     stock.data['cat_3'] = np.where(stock.data['ranking'].between(threshold2, threshold3), 1, 0)
                     stock.data['cat_3'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
+            if true_ranking:
+                if 'true_ranking' not in stock.data.columns:
+                    raise KeyError('true_ranking not available, first use generate_ranking(true_ranking=True)')
+                else:
+                    if threshold1:
+                        stock.data['true_cat_1'] = np.where(stock.data['true_ranking'].between(0, threshold1), 1, 0)
+                        stock.data['true_cat_1'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
+                    if threshold2:
+                        stock.data['true_cat_2'] = np.where(stock.data['true_ranking'].between(threshold1, threshold2), 1, 0)
+                        stock.data['true_cat_2'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
+                    if threshold3:
+                        stock.data['true_cat_3'] = np.where(stock.data['true_ranking'].between(threshold2, threshold3), 1, 0)
+                        stock.data['true_cat_3'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
 
 
     @classmethod
@@ -274,6 +313,11 @@ class Stock:
         yahoo_data['ticker'] = self.name
         self.set_data(yahoo_data)
         return self.data
+
+
+    def drop_columns(self, cols=['high', 'low', 'open', 'adj_close']):
+        """drops listed columns from self.data"""
+        self.data.drop(labels=cols, axis=1, inplace=True, errors='ignore')
 
     def lowercase(self):
         uppercase_names = self.data.columns
@@ -385,7 +429,7 @@ class Stock:
                                   np.where(self.data[f'sma_{sma_short_days}'] > self.data[f'sma_{sma_long_days}'], 1,
                                            np.nan))
 
-        crosses = [0]
+        crosses = [np.nan]
         for i in range(len(below_or_above) - 1):
             crosses.append(below_or_above[i + 1] - below_or_above[i])
 
@@ -671,7 +715,7 @@ class Stock:
                 print('current_date', current_date)
 
             # relevant_data only contains the X,y pairs needed for fitting and forecasting
-            relevant_data = self.data.drop(skip_cols, axis=1)
+            relevant_data = self.data.drop(skip_cols, axis=1, errors='ignore')
             if verbose:
                 print('columns used for fitting', relevant_data.columns)
             training_data = relevant_data.loc[:current_date, :]
