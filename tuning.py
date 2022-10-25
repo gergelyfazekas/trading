@@ -7,6 +7,7 @@ import stock_class
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf
 
 
 def tune_tech_levels(from_date, to_date, stocks, param_space, search="grid"):
@@ -147,6 +148,10 @@ def is_stationary(input_series, p_val=0.05, maxlag=5):
     else:
         return False
 
+def plot_acf(input_series, alpha=0.05, auto_ylim=True):
+    if not isinstance(input_series, pd.Series):
+        input_series = pd.Series(input_series)
+    plot_acf(input_series.dropna(), lags=[1,2,3,4,5,6,7,8,9,10], alpha=alpha, auto_ylims=auto_ylim)
 
 def closest_number(num, lst):
     """returns the element from lst closest (in absolute value) to num"""
