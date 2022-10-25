@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf
+import math
 
 
 def tune_tech_levels(from_date, to_date, stocks, param_space, search="grid"):
@@ -152,6 +153,43 @@ def plot_acf(input_series, alpha=0.05, auto_ylim=True):
     if not isinstance(input_series, pd.Series):
         input_series = pd.Series(input_series)
     plot_acf(input_series.dropna(), lags=[1,2,3,4,5,6,7,8,9,10], alpha=alpha, auto_ylims=auto_ylim)
+
+def get_outliers(input_series, multiplier=3.69, verbose=True):
+    """identifies outliers in a series
+       steps:
+       1)makes the series stationary if not already
+       2)outlier is defined as outside the [mean - (std * multiplier) , mean + (std * multiplier)]
+
+       args:
+       input_series: list/pd.Series/np.array
+       multiplier: float, default=3.69, z-value for 0.001 (0.1%)
+       """
+    if isinstance(input_series, pd.Series):
+        plot_title = input_series.name
+    else:
+        plot_title = None
+        input_series = pd.Series(input_series)
+
+    if is_stationary(input_series):
+        pass
+    else:
+        input_series = stationary_maker(input_series)
+
+    stdev = math.sqrt(np.var(input_series, ddof=1))
+    result = pd.DataFrame({'series': input_series, 'outliers': np.zeros((len(input_series)))})
+    upper_bound = input_series.mean()+(multiplier*stdev)
+    lower_bound = input_series.mean()-(multiplier*stdev)
+    result['outliers'].where(result['series'].between(lower_bound, upper_bound, inclusive='neither'), 1, inplace=True)
+    if verbose:
+        plt.figure(figsize=(16, 6))
+        if plot_title:
+            plt.title(plot_title)
+        plt.plot(result['series'], label='original')
+        plt.plot(result.loc[result['outliers'] == 0, 'series'], label='outliers removed')
+        plt.legend()
+    return result
+
+
 
 def closest_number(num, lst):
     """returns the element from lst closest (in absolute value) to num"""
