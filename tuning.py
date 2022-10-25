@@ -106,24 +106,32 @@ def flatten(list_of_lists, num_iter):
         return flat_list
 
 
-def stationary_maker(input_series, p_val=0.05, maxlag=5):
+def stationary_maker(input_series, p_val=0.05, maxlag=5, verbose=False):
     """makes an input_series stationary by differencing no more than 2 times and retruns the stationary series
 
     stationarity is checked with adfuller test using p_val as threshold
     H0: potetntial unit root / non-stationary -- test statistic >= p_val
     H1: no unit root / is stationary -- test statistic < p_val
 
-    accepts list and pd.Series as input_series
+    args:
+    input_series: a pd.Series or a list object
+    p_val: p-value below which reject H0
     """
     if isinstance(input_series, (pd.DataFrame, pd.Series)):
         if adfuller(input_series, maxlag=maxlag)[1] < p_val:
+            if verbose:
+                print('no differencing')
             return input_series
         elif adfuller(input_series, maxlag=maxlag)[1] >= p_val:
             first_diff = input_series.diff().dropna()
             if adfuller(first_diff, maxlag=maxlag)[1] < p_val:
+                if verbose:
+                    print('first differencing')
                 return first_diff
             elif adfuller(first_diff, maxlag=maxlag)[1] >= p_val:
                 second_diff = first_diff.diff().dropna()
+                if verbose:
+                    print('second differencing')
                 return second_diff
 
     elif isinstance(input_series, list):
@@ -131,6 +139,13 @@ def stationary_maker(input_series, p_val=0.05, maxlag=5):
         stationary_maker(input_series, p_val)
     else:
         raise TypeError(f"invalid type {type(input_series)}")
+
+
+def is_stationary(input_series, p_val=0.05, maxlag=5):
+    if adfuller(input_series, maxlag=maxlag)[1] < p_val:
+        return True
+    else:
+        return False
 
 
 def closest_number(num, lst):

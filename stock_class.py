@@ -27,10 +27,10 @@ class Stock:
     def __init__(self, name):
         # stock related attributes
         self.name = name
-        self.data = pd.DataFrame
         self.sector = str
         self.yahoo_pull_start_date = START_DATE
         self.yahoo_pull_end_date = END_DATE
+        self.data = pd.DataFrame
         # portfolio related attributes
         self.log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
                                  'amount': [np.nan] * PLACEHOLDER,
@@ -235,7 +235,8 @@ class Stock:
                     total_df.loc[current_date, 'true_ranking'] = np.nan
                 else:
                     try:
-                        total_df.loc[current_date, 'true_ranking'] = total_df.loc[current_date, label_name].rank(ascending=False)
+                        total_df.loc[current_date, 'true_ranking'] = total_df.loc[current_date, label_name].rank(
+                            ascending=False)
                     except AttributeError:
                         total_df.loc[current_date, 'true_ranking'] = 1
 
@@ -243,7 +244,6 @@ class Stock:
             stock.set_data(total_df.loc[total_df['ticker'] == stock.name])
             stock.lowercase()
             stock.set_index()
-
 
     @classmethod
     def ranking_to_dummy(cls, threshold1=5, threshold2=10, threshold3=15, true_ranking=False):
@@ -288,12 +288,13 @@ class Stock:
                         stock.data['true_cat_1'] = np.where(stock.data['true_ranking'].between(0, threshold1), 1, 0)
                         stock.data['true_cat_1'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
                     if threshold2:
-                        stock.data['true_cat_2'] = np.where(stock.data['true_ranking'].between(threshold1, threshold2), 1, 0)
+                        stock.data['true_cat_2'] = np.where(stock.data['true_ranking'].between(threshold1, threshold2),
+                                                            1, 0)
                         stock.data['true_cat_2'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
                     if threshold3:
-                        stock.data['true_cat_3'] = np.where(stock.data['true_ranking'].between(threshold2, threshold3), 1, 0)
+                        stock.data['true_cat_3'] = np.where(stock.data['true_ranking'].between(threshold2, threshold3),
+                                                            1, 0)
                         stock.data['true_cat_3'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
-
 
     @classmethod
     def get_stocks_per_date(cls, verbose=False):
@@ -301,10 +302,9 @@ class Stock:
         if verbose:
             print('total_df', total_df)
         df1 = pd.DataFrame(total_df.groupby('date_')['ticker'].apply(lambda x: len(x)))
-        df1.rename(columns={'ticker':'len_ticker'}, inplace=True)
+        df1.rename(columns={'ticker': 'len_ticker'}, inplace=True)
         df2 = pd.DataFrame(total_df.groupby('date_')['ticker'].apply(list))
-        return pd.concat([df1,df2], axis=1)
-
+        return pd.concat([df1, df2], axis=1)
 
     def yahoo_pull_data(self):
         yahoo_data = wb.DataReader(self.name, "yahoo", self.yahoo_pull_start_date, self.yahoo_pull_end_date)
@@ -313,7 +313,6 @@ class Stock:
         yahoo_data['ticker'] = self.name
         self.set_data(yahoo_data)
         return self.data
-
 
     def drop_columns(self, cols=['high', 'low', 'open', 'adj_close']):
         """drops listed columns from self.data"""
@@ -357,6 +356,44 @@ class Stock:
             self.first_date = self.data.index[0]
             self.last_date = self.data.index[-1]
 
+    def calc_variance(self, lookback=None):
+        """calculates variance based on daily returns series
+
+        args:
+        lookback: if None global variance is calc'd for each date,
+                  if int then the global_var and a rolling.var() is calc'd for each date
+        """
+        # check if returns exist
+        if 'stock_return' not in self.data.columns:
+            user_input = str(input('stock_return does not exist, want to calculate: y/n'))
+            if user_input.upper() in ['YES', 'Y']:
+                self.calc_return()
+            else:
+                raise InterruptedError('use calc_return before calc_variance')
+
+        # check if variance_global exists
+        if 'variance_global' in self.data.columns:
+            user_input = str(input('variance_global already exists, want to recalculate: y/n'))
+
+        # if not in it or user wants to recalculate
+        if 'variance_global' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
+            variance_lst = []
+            for current_date in self.data.index:
+                # ddof=1 to be consistent with the default degrees-of-freedom of pd.rolling.var
+                vari = np.var(self.data.loc[:current_date, 'stock_return'].dropna(), ddof=1)
+                variance_lst.append(vari)
+            self.data['variance_global'] = variance_lst
+
+        # here we have 'variance_global' for sure, so we can use it to replace the first nan entries created by rolling
+        if lookback:
+            if f'variance_{lookback}' in self.data.columns:
+                user_input = str(input(f'variance_{lookback} already exists, want to recalculate: y/n'))
+
+            if f'variance_{lookback}' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
+                self.data[f'variance_{lookback}'] = self.data['stock_return'].rolling(lookback).var()
+                self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
+                                                       self.data['variance_global'], inplace=True)
+
     def set_sector(self):
         pass
 
@@ -365,6 +402,16 @@ class Stock:
 
     def set_yahoo_pull_end_date(self, new_date):
         self.yahoo_pull_end_date = new_date
+
+    def calc_return(self):
+        """calculates daily return"""
+        if 'stock_return' in self.data.columns:
+            user_input = str(input('stock_return already exists, wnat to recalculate: y/n'))
+        if 'stock_return' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
+            tmp_df = pd.DataFrame({'close': self.data['close'], 'lag': self.data['close'].shift()})
+            tmp_df.dropna(inplace=True)
+            tmp_df['stock_return'] = tmp_df['close'] / tmp_df['lag']
+            self.data['stock_return'] = tmp_df['stock_return'].copy()
 
     def labeling_function(self, look_ahead_range=10, method='minmax'):
         label = []
@@ -735,5 +782,3 @@ class Stock:
                 self.data.loc[forecast_date, 'forecast'] = prediction
             except IndexError:
                 return model
-
-
