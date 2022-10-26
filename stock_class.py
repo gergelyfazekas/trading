@@ -453,18 +453,29 @@ class Stock:
         else:
             self.data[f'label_{method}'] = label
 
-    def sma_calc(self, period=20):
+    def sma_calc(self, period=20, only_last_date=False):
         """calculates simple moving average with window length=period
         creates a new column for the sma_{period} in self.data
         if data is too short for given period a ValueError is raised
         """
-        if len(self.data.index) <= period:
-            raise ValueError(
-                f'len(self.data.index)={len(self.data.index)} for {self.name} is shorter than period={period}')
-        if f'sma_{period}' not in self.data.columns:
-            self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
+        if only_last_date:
+            if f'sma_{period}' not in self.data.columns:
+                self.data[f'sma_{period}'] = np.nan
+                self.data.loc[self.last_date, f'sma_{period}'] = \
+                    self.data['close'][-period:].mean()
         else:
-            print(f'sma_{period} already exists')
+            if len(self.data.index) <= period:
+                raise ValueError(
+                    f'len(self.data.index)={len(self.data.index)} for {self.name} is shorter than period={period}')
+            if f'sma_{period}' not in self.data.columns:
+                self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
+            else:
+                user_input = str(input(f'sma_{period} already exists, want to recalculate: y/n'))
+                if user_input.upper() in ['YES', 'Y']:
+                    self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
+                else:
+                    raise InterruptedError
+
 
     def sma_cross(self, sma_short_days, sma_long_days):
         if not f'sma_{sma_long_days}' in self.data.columns:
