@@ -482,6 +482,30 @@ class Stock:
 
         self.data[f'sma_cross_{sma_short_days}_{sma_long_days}'] = crosses
 
+    def sma_to_input(self, only_last_date=False):
+        """turns sma levels into input used for the forecast model
+           calculates the distance: self.data['sma_..._distance'] = self.data['close'] - self.data['sma_...']
+           for all columns starting with sma (sma_9, sma_14, sma_100) except sma_cross !!!
+
+        args:
+        only_last_date: if True then self.data['close'] - self.data['sma_...'] is only calc'd for self.last_date,
+                        if False then all of self.data['close'] - self.data['sma_...'] is calc'd
+        """
+        sma_cols = pd.Series([col for col in self.data if col.startswith('sma_')])
+        sma_cols.drop(sma_cols.index[sma_cols.str.contains('cross')], inplace=True)
+        sma_cols.drop(sma_cols.index[sma_cols.str.endswith('distance')], inplace=True)
+
+        if only_last_date:
+            current_price = self.get_price(as_of=self.last_date)
+            for col in sma_cols:
+                if f'{col}_distance' not in self.data.columns:
+                    self.data[f'{col}_distance'] = np.nan
+                self.data.loc[self.last_date, f'{col}_distance'] = current_price - self.data.loc[self.last_date, col]
+        else:
+            for col in sma_cols:
+                self.data[f'{col}_distance'] = self.data['close'] - self.data[col]
+
+
     def rsi_calc(self, lookback=14):
         diffs = self.data['close'].diff()
         ups = diffs.where(diffs > 0, 0)
