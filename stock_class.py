@@ -497,13 +497,17 @@ class Stock:
 
         if only_last_date:
             current_price = self.get_price(as_of=self.last_date)
+            # percentage distance from current price
             for col in sma_cols:
                 if f'{col}_distance' not in self.data.columns:
                     self.data[f'{col}_distance'] = np.nan
-                self.data.loc[self.last_date, f'{col}_distance'] = current_price - self.data.loc[self.last_date, col]
+                self.data.loc[self.last_date, f'{col}_distance'] = \
+                    (current_price-self.data.loc[self.last_date, col])/current_price
         else:
+            # percentage distance from close price
             for col in sma_cols:
-                self.data[f'{col}_distance'] = self.data['close'] - self.data[col]
+                self.data[f'{col}_distance'] = \
+                    (self.data['close']-self.data[col])/self.data['close']
 
 
     def rsi_calc(self, lookback=14):
