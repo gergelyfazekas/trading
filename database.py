@@ -224,6 +224,11 @@ def insert_data_into_sql(df, engine, sql_table="stock_prices", if_exists="fail")
 	"""main function for pushing dataframe into sql
 
 	either aggregate the data to a total_df and use if_exists='replace' or append stock by stock"""
+	if sql_table == "stock_prices":
+		if if_exists == "replace":
+			print("stock_prices already has a lot of data uploaded, do not use replace")
+			raise InterruptedError
+
 	df.to_sql(name=sql_table, con=engine, if_exists=if_exists, index=False)
 
 
@@ -291,7 +296,7 @@ def exists_sql_table(conn, sql_table):
 
 
 def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None,
-						sql_table="stock_prices", if_exists="fail", verbose=False, stock_csv="tickers_30.csv"):
+						sql_table="stock_prices", if_exists="fail", verbose=False, stock_csv="tickers_30.csv", sep=';'):
 	if exists_sql_table(conn, sql_table):
 		pass
 	else:
@@ -299,13 +304,13 @@ def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None,
 					   f' not created yet, use create_sql_table and then fill_sql_from_yahoo with append')
 
 	stock_class.Stock.clear_stock_list()
-	stock_class.Stock.create_stock_list_from_csv(stock_csv)
+	stock_class.Stock.create_stock_list_from_csv(stock_csv, sep=sep)
 	for stock in stock_class.Stock.stock_list:
 		print(stock.name)
 		if not start_date:
 			last_date_sql = conn.execute(
 				f"SELECT date_ FROM {sql_table} WHERE ticker='{stock.name}' ORDER BY date_ DESC LIMIT 1").fetchall()
-			print('last_Date_sql', last_date_sql)
+			print('last_date_sql', last_date_sql)
 			if not last_date_sql:
 				# if ticker not is sql_table the above conn.execute returns []
 				# use default start-end dates
@@ -321,12 +326,12 @@ def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None,
 		print('set_date 1', stock.yahoo_pull_start_date)
 
 	futures = stock_class.Stock.yahoo_pull_data_for_stock_list()
-	# for futures_item in futures:
-	# 	df = futures_item.result()
-	# 	try:
-	# 		insert_data_into_sql(df=df, sql_table=sql_table, engine=conn, if_exists=if_exists)
-	# 	except KeyError:
-	# 		pass
+	for futures_item in futures:
+		df = futures_item.result()
+		try:
+			insert_data_into_sql(df=df, sql_table=sql_table, engine=conn, if_exists=if_exists)
+		except KeyError:
+			pass
 	for stock in stock_class.Stock.stock_list:
 		if stock.data.empty:
 			continue

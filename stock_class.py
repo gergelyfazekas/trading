@@ -30,7 +30,7 @@ class Stock:
         self.sector = str
         self.yahoo_pull_start_date = START_DATE
         self.yahoo_pull_end_date = END_DATE
-        self.data = pd.DataFrame
+        self.data = pd.DataFrame()
         # portfolio related attributes
         self.log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
                                  'amount': [np.nan] * PLACEHOLDER,
@@ -76,8 +76,8 @@ class Stock:
         print(f"tickers_{number}.csv was created")
 
     @classmethod
-    def create_stock_list_from_csv(cls, filename="tickers_30.csv"):
-        excel_data = pd.read_csv(open(filename, encoding="latin-1"))
+    def create_stock_list_from_csv(cls, filename="tickers_30.csv", sep=None):
+        excel_data = pd.read_csv(filename, encoding="latin-1", sep=sep)
         tickers = excel_data['Symbol'].copy()
         tickers = tickers.values.tolist()
         for ticker in tickers:
