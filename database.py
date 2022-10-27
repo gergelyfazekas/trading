@@ -227,6 +227,7 @@ def insert_data_into_sql(df, engine, sql_table="stock_prices", if_exists="fail",
 	"""main function for pushing dataframe into sql
 
 	either aggregate the data to a total_df and use if_exists='replace' or append stock by stock"""
+	max_rows_at_once = 100000
 	backup_table_name = "stock_prices_backup"
 	if sql_table == "stock_prices":
 		if if_exists == "replace":
@@ -251,7 +252,13 @@ def insert_data_into_sql(df, engine, sql_table="stock_prices", if_exists="fail",
 			print("backup successful")
 	if verbose:
 		print(f"uploading df to {sql_table} with if_exists={if_exists}")
-	df.to_sql(name=sql_table, con=engine, if_exists=if_exists, index=False)
+	# slice the df to a number of max_rows_at_once chunks and appending them to each other one-by-one
+	i = 0
+	while i < len(df.index):
+		df_slice = df.iloc[i:i+max_rows_at_once,:].copy()
+		df_slice.to_sql(name=sql_table, con=engine, if_exists=if_exists, index=False)
+		if_exists = "append"
+		i += max_rows_at_once
 
 
 def create_sql_table(engine, sql_table, columns):
