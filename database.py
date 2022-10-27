@@ -1,9 +1,12 @@
+import time
+
 import mysql.connector
 import datetime
 import pandas as pd
 from pandas_datareader import data as wb
 import stock_class
 import tuning
+import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy import exc
 
@@ -220,15 +223,34 @@ def sql_connect(host="database-1.c30doxhxuudc.us-east-1.rds.amazonaws.com", user
 	return conn
 
 
-def insert_data_into_sql(df, engine, sql_table="stock_prices", if_exists="fail"):
+def insert_data_into_sql(df, engine, sql_table="stock_prices", if_exists="fail", create_backup=False, verbose=True):
 	"""main function for pushing dataframe into sql
 
 	either aggregate the data to a total_df and use if_exists='replace' or append stock by stock"""
+	backup_table_name = "stock_prices_backup"
 	if sql_table == "stock_prices":
 		if if_exists == "replace":
-			print("stock_prices already has a lot of data uploaded, do not use replace")
-			raise InterruptedError
-
+			if not create_backup:
+				print("stock_prices is the main table, do not use if_exists=replace with create_backup=False")
+				raise InterruptedError
+	if create_backup:
+		if verbose:
+			print(f"creating backup in table: {backup_table_name}")
+		try:
+			engine.execute(f'CREATE TABLE {backup_table_name} LIKE {sql_table}')
+		except exc.ProgrammingError as err:
+			error_msg = str(err.__dict__['orig'])
+			if error_msg.endswith("exists") and error_msg.startswith("1050"):
+				if verbose:
+					print("Got error: error_msg")
+					print("Dropping existing backup table and recreating from scratch")
+				engine.execute(f'DROP TABLE {backup_table_name}')
+				engine.execute(f'CREATE TABLE {backup_table_name} LIKE {sql_table}')
+		engine.execute(f'INSERT INTO {backup_table_name} SELECT * FROM {sql_table}')
+		if verbose:
+			print("backup successful")
+	if verbose:
+		print(f"uploading df to {sql_table} with if_exists={if_exists}")
 	df.to_sql(name=sql_table, con=engine, if_exists=if_exists, index=False)
 
 
@@ -253,7 +275,7 @@ def create_sql_table(engine, sql_table, columns):
 				f'type {type(df.iloc[0, df.columns.get_loc(new_col_name)])} not implemented in push_data_sql')
 
 		if idx == 0:
-			engine.execute(f'CREATE TABLE [IF NOT EXISTS] {sql_table} ({str(new_col_name)} {str(new_col_type)})')
+			engine.execute(f'CREATE TABLE IF NOT EXISTS {sql_table} ({str(new_col_name)} {str(new_col_type)})')
 		else:
 			engine.execute(f'ALTER TABLE {sql_table} ADD {str(new_col_name)} {str(new_col_type)}')
 
@@ -340,7 +362,7 @@ def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None,
 		insert_data_into_sql(df=stock.data, sql_table=sql_table, engine=conn, if_exists=if_exists)
 
 
-def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each=True, return_whole=True):
+def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each=True, return_whole=True, verbose=False):
 	"""pulls all data form a given sql table EVEN IF stock_names IS NOT None!!!
 	(1) sets it to stock.data (if set_data=True)
 	(2) returns the whole sql table as a df (if return_whole = True)
@@ -361,17 +383,28 @@ def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each
 		sql_names = [ticker for ticker in stock_names if ticker in sql_names]
 	stock_class.Stock.clear_stock_list()
 	stock_class.Stock.create_stock_list_sql(sql_names)
-	if set_each:
-		for stock in stock_class.Stock.stock_list:
-			stock.set_data(price_query_sql(stock.name, conn, sql_table=sql_table))
-	if return_whole:
-		result = conn.execute(f"SHOW COLUMNS FROM {sql_table}").fetchall()
-		database_columns = [x[0] for x in result]
+	sql_names = tuple(sql_names)
+	if verbose:
+		print("pulling data")
+	result = conn.execute(f"SHOW COLUMNS FROM {sql_table}").fetchall()
+	database_columns = [x[0] for x in result]
+	if stock_names:
+		total_df = conn.execute(f"SELECT * FROM {sql_table} WHERE ticker IN {sql_names}").fetchall()
+	else:
+		# WHERE condition slows down -- takes twice the time -- avoid if possible
 		total_df = conn.execute(f"SELECT * FROM {sql_table}").fetchall()
-		total_df = pd.DataFrame(data=total_df, columns=database_columns)
-		total_df.loc[:, 'date_'] = pd.to_datetime(total_df.loc[:, 'date_'])
-		total_df.set_index('date_', inplace=True)
-		total_df['date_'] = total_df.index.copy()
+	total_df = pd.DataFrame(data=total_df, columns=database_columns)
+	total_df.loc[:, 'date_'] = pd.to_datetime(total_df.loc[:, 'date_'])
+	total_df.set_index('date_', inplace=True)
+	total_df['date_'] = total_df.index.copy()
+	if set_each:
+		start_time = time.time()
+		for stock in stock_class.Stock.stock_list:
+			stock.set_data(total_df[total_df['ticker'] == stock.name].copy())
+			tot_time = time.time()-start_time
+			if verbose:
+				print(stock.name, tot_time)
+	if return_whole:
 		return total_df
 
 
