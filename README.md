@@ -2,7 +2,7 @@
 # algorithmic portfolio optimization and stock price prediction
 
 
-**Goal: 
+**Goal:** 
 
 This project is seeking to create an automated stock trading system which is capable of managing a portfolio without human supervision.
 For this purpose some decision rules are needed to guide the program whether to buy, sell or do nothing with regards to a particular stock and time. Rather then a theory based portfolio optimization I choose to go with an "empirical decision rule", namely using a genetic algorithm to search for a "good enough" decision rule based on some input variables. These input variables are in line with the conventional risk-return approach, such that a decision whether to transact a certain stock is based on a forecast of its future performace, its estimated variance-covariance structure with the current portfolio and some other factors such as the level of diversification of the current portfolio. This genetic search approach does not impose restrictions on the decision, if the forecast tends to be accurate then that will receive a bigger weight, if the variance estimate is more robust then that will guide the decision and if neither is accurate the level of diversification or general market trends migth dominate the decision.
@@ -13,7 +13,7 @@ The data comes from the yahoo finance api through the pandas datareader package.
 all listed on the NASDAQ. The price frequency is daily, so that the total number of available data points is around 1 million. Since yahoo finance queries are limited and generally quite slow, an sql database is created which is stored on amazon's AWS RDS cloud storage to ease access to the data for quick calculations.
 
 
-**Code:
+**Code:**
 
 All .py files only contain functions and classes and cannot be run on their own. Since most of the analysis is done on a one-off basis 
 (e.g. there is no need to calculate the returns of a stock multiple times) these functions are imported to jupyter notebooks to create adhoc pipelines.
@@ -25,7 +25,7 @@ All .py files only contain functions and classes and cannot be run on their own.
 - tuning.py is concerned with some auxiliary funtions mainly used for tuning some parameters
 
 
-**Problems and implemented solutions:
+**Problems and implemented solutions:**
 
 1) Data:
 - querying yahoo finance is very slow and since it is an I/O type bound this problem was mitigated with concurrent querying, so that one query is issued and before getting back the result from yahoo's server another (or rather several other) price queries are sent as well. This way the price query process was shortened about 10-fold. 
