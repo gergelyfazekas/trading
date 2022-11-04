@@ -5,7 +5,6 @@ from pandas_datareader import data as wb
 import pandas as pd
 import numpy as np
 import database
-import sys
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 import tuning
