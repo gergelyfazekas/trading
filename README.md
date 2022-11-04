@@ -1,5 +1,5 @@
 # trading
-# algorithmic portfolio optimization and stock price forecasting
+# algorithmic portfolio optimization and stock price prediction
 
 
 Goal: 
