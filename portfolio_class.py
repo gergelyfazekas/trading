@@ -30,6 +30,7 @@ class Portfolio:
             self.number_of_stocks = int
             self.sectors = list
             self.currencies = list
+            self.empirical_returns
             self.log = pd.DataFrame({'date_': [np.nan] * stock_class.PLACEHOLDER,
                                      'stock_name': [np.nan] * stock_class.PLACEHOLDER,
                                      'direction': [np.nan] * stock_class.PLACEHOLDER,
@@ -244,3 +245,42 @@ class Portfolio:
         else:
             print('Do not have enough amount to sell')
             pass
+
+
+    def calc_variance(self, lookback=None):
+        """calculates total portfolio variance based on daily portfolio returns
+
+        args:
+        lookback: if None global variance is calc'd for each date, e.g. var(data[:current_date])
+                  if int then the global_var and a rolling.var() is calc'd for each date
+        """
+        # check if returns exist
+        if 'stock_return' not in self.data.columns:
+            user_input = str(input('stock_return does not exist, want to calculate: y/n'))
+            if user_input.upper() in ['YES', 'Y']:
+                self.calc_return()
+            else:
+                raise InterruptedError('use calc_return before calc_variance')
+
+        # check if variance_global exists
+        if 'variance_global' in self.data.columns:
+            user_input = str(input('variance_global already exists, want to recalculate: y/n'))
+
+        # if not in it or user wants to recalculate
+        if 'variance_global' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
+            variance_lst = []
+            for current_date in self.data.index:
+                # ddof=1 to be consistent with the default degrees-of-freedom of pd.rolling.var
+                vari = np.var(self.data.loc[:current_date, 'stock_return'].dropna(), ddof=1)
+                variance_lst.append(vari)
+            self.data['variance_global'] = variance_lst
+
+        # here we have 'variance_global' for sure, so we can use it to replace the first nan entries created by rolling
+        if lookback:
+            if f'variance_{lookback}' in self.data.columns:
+                user_input = str(input(f'variance_{lookback} already exists, want to recalculate: y/n'))
+
+            if f'variance_{lookback}' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
+                self.data[f'variance_{lookback}'] = self.data['stock_return'].rolling(lookback).var()
+                self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
+                                                       self.data['variance_global'], inplace=True)

@@ -121,6 +121,12 @@ class Stock:
         print(f"No data available: {drop}")
 
     @classmethod
+    def drop_stock(cls, name):
+        idx = cls.get_stock_names().index(name)
+        cls.stock_list.pop(idx)
+
+
+    @classmethod
     def fetch_stock(cls, name):
         for stock in cls.stock_list:
             if stock.name == name:
@@ -179,14 +185,30 @@ class Stock:
 
     @classmethod
     def aggregate_data(cls):
-        col_names = cls.stock_list[0].data.columns
-        total_df = pd.DataFrame(columns=col_names)
+        total_df = cls.stock_list[0].data
         for stock in cls.stock_list:
             total_df = pd.concat([total_df, stock.data])
+        total_df.drop_duplicates(inplace=True)
         return total_df
 
     @classmethod
-    def generate_ranking(cls, true_ranking=False, label_name='label_minmax'):
+    def set_each(cls, total_df):
+        """given a total_df it does the following for every stock in stock_list:
+         set_data + lowercase + set_index + set_dates
+        """
+        stock_names = list(total_df['ticker'].unique())
+        cls.clear_stock_list()
+        cls.create_stock_list_sql(stock_names)
+
+        for stock in cls.stock_list:
+            stock.set_data(total_df[total_df['ticker'] == stock.name].copy())
+            stock.lowercase()
+            stock.set_index()
+            stock.set_dates()
+
+
+    @classmethod
+    def generate_ranking(cls, true_ranking=False, label_name='label_minmax_10'):
         """generates ranking for all stocks in stock_list for every day
         args:
         true_ranking: if True, calculates the ranking based on the true label and not the forecast
@@ -355,12 +377,13 @@ class Stock:
             self.first_date = self.data.index[0]
             self.last_date = self.data.index[-1]
 
-    def calc_variance(self, lookback=None):
+    def calc_variance(self, lookback=None, user_override=None):
         """calculates variance based on daily returns series
 
         args:
         lookback: if None global variance is calc'd for each date,
                   if int then the global_var and a rolling.var() is calc'd for each date
+        user_override: if not None, this is used instead of user_input to recalculate the global_variance or not
         """
         # check if returns exist
         if 'stock_return' not in self.data.columns:
@@ -371,8 +394,13 @@ class Stock:
                 raise InterruptedError('use calc_return before calc_variance')
 
         # check if variance_global exists
-        if 'variance_global' in self.data.columns:
-            user_input = str(input('variance_global already exists, want to recalculate: y/n'))
+        if user_override is True:
+            user_input = True
+        elif user_override is False:
+            user_input = False
+        if user_override is None:
+            if 'variance_global' in self.data.columns:
+                user_input = str(input('variance_global already exists, want to recalculate: y/n'))
 
         # if not in it or user wants to recalculate
         if 'variance_global' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
@@ -445,12 +473,12 @@ class Stock:
             padding = np.array([np.nan] * diff_length)
             label.append(list(padding))
 
-        if f'label_{method}' in self.data.columns:
-            user_input = str(input(f'label_{method} already in {self.name}.data, want to replace: y/n'))
+        if f'label_{method}_{look_ahead_range}' in self.data.columns:
+            user_input = str(input(f'label_{method}_{look_ahead_range} already in {self.name}.data, want to replace: y/n'))
             if user_input.upper() in ['YES', 'Y']:
-                self.data[f'label_{method}'] = label
+                self.data[f'label_{method}_{look_ahead_range}'] = label
         else:
-            self.data[f'label_{method}'] = label
+            self.data[f'label_{method}_{look_ahead_range}'] = label
 
     def sma_calc(self, period=20, only_last_date=False):
         """calculates simple moving average with window length=period
@@ -493,7 +521,7 @@ class Stock:
         self.data[f'sma_cross_{sma_short_days}_{sma_long_days}'] = crosses
 
     def sma_to_input(self, only_last_date=False):
-        """turns sma levels into input used for the forecast model
+        """turns sma levels into input for one stock used for the forecast model
            calculates the distance: self.data['sma_..._distance'] = self.data['close'] - self.data['sma_...']
            for all columns starting with sma (sma_9, sma_14, sma_100) except sma_cross !!!
 
@@ -502,8 +530,12 @@ class Stock:
                         if False then all of self.data['close'] - self.data['sma_...'] is calc'd
         """
         sma_cols = pd.Series([col for col in self.data if col.startswith('sma_')])
-        sma_cols.drop(sma_cols.index[sma_cols.str.contains('cross')], inplace=True)
-        sma_cols.drop(sma_cols.index[sma_cols.str.endswith('distance')], inplace=True)
+        if not sma_cols.empty:
+            sma_cols.drop(sma_cols.index[sma_cols.str.contains('cross')], inplace=True)
+            sma_cols.drop(sma_cols.index[sma_cols.str.endswith('distance')], inplace=True)
+        else:
+            print(f'No sma column: {self.name}')
+            return 0
 
         if only_last_date:
             current_price = self.get_price(as_of=self.last_date)
