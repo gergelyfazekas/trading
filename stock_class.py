@@ -765,9 +765,9 @@ class Stock:
         return strong_distance_percent, medium_distance_percent
 
     def tech_level_input_calc(self, lookback, init_size=50, verbose=False, **kwargs):
-        """calculates tech_levels_to_input for one stock for the training data with daily iteration
+        """calculates everything related to tech_levels for one stock for the whole training data with daily iteration
         
-        calls tech_levels_to_input within a daily loop looking only backwards
+        calls tech_levels_to_input within a daily loop looking only backwards which calls get_tech_levels
         generates the x variable for every day that can be used in the forecast model
         
         
@@ -775,6 +775,7 @@ class Stock:
         lookback: window size for calculating the technical levels, passed to tech_levels_to_input and get_tech_levels
         init_size: the size of the data chunk below which no technical levels are calculated, default = 50
         verbose: print stuff
+        """
         """
         if 'tech_strong' not in self.data.columns:
             self.data['tech_strong'] = np.nan
@@ -794,6 +795,7 @@ class Stock:
             else:
                 print(f'None returned for {self.name}')
                 return None
+                """
 
         for row in range(init_size, len(self.data.index)):
             current_date = self.data.index[row]
@@ -816,6 +818,11 @@ class Stock:
         init_size: the first prediction is estimated for init_size + 1
         skip_cols: column names not to use in fitting as a string or list of strings
         **kwargs: passed to the selected method
+
+        stock_return can be used as a covariate because it is known at the time of the forecast
+        label_stock_return is tomorrow's stock_return
+        so for a specific date: regress label_stock_return on stock_return, lag_stock_return, lag2_stock_return ...
+
         """
         if verbose:
             print(self.name)
@@ -835,7 +842,7 @@ class Stock:
             relevant_data = self.data.drop(skip_cols, axis=1, errors='ignore')
             if verbose:
                 print('columns used for fitting', relevant_data.columns)
-            training_data = relevant_data.loc[:current_date, :]
+            training_data = relevant_data.loc[:current_date, :].copy()
 
             # fitting the model
             model = method(training_data, label_str, **kwargs)
@@ -852,3 +859,55 @@ class Stock:
                 self.data.loc[forecast_date, 'forecast'] = prediction
             except IndexError:
                 return model
+
+    @classmethod
+    def cross_validate(cls, total_df, label_str, skip_cols, method, init_ratio=0.99, **kwargs):
+        if 'forecast' not in total_df.columns:
+            total_df['forecast'] = np.nan
+
+        if 'forecast' not in skip_cols:
+            skip_cols.append('forecast')
+
+
+        if not 0 < init_ratio < 1:
+            raise ValueError("init_ratio should be between 0 and 1")
+        init_size = round(len(total_df.index) * init_ratio)
+        init_date = total_df.index[init_size]
+        size = len(total_df.loc[:init_date, :])
+
+        for row in range(size, len(total_df.index)):
+            current_date = total_df.index[row]
+            # forecast date is the second element (1st index) of the unique upcoming days
+            try:
+                forecast_date = total_df['date_'].loc[current_date:].unique()[1]
+            except IndexError:
+                print('Done')
+                return model
+
+            # dropping columns not needed for forecasting
+            relevant_df = total_df.drop(skip_cols, axis=1, errors='ignore').copy()
+
+            # gradient_booster cannot handle NaNs but has feature_importance
+            if method.__name__ == 'gradient_booster':
+                categorical_df = relevant_df.select_dtypes(include="category")
+                for col_name in categorical_df.columns:
+                    categorical_df[col_name] = categorical_df[col_name].astype('object')
+                relevant_df.drop(relevant_df.select_dtypes(include="category"), axis=1, inplace=True)
+                relevant_df.fillna(100000, inplace=True)
+
+            # training data until the current_date in the loop
+            training_slice = relevant_df.loc[:current_date, :].copy()
+            # fitting
+            model = method(training_slice, label_str, **kwargs)
+
+            # forecasting
+            new_observation_X = relevant_df.loc[forecast_date, relevant_df.columns != label_str].copy()
+            if len(new_observation_X.index) == 1:
+                new_observation_X = np.array(new_observation_X).reshape(1, -1)
+            prediction = model.predict(new_observation_X)
+            total_df.loc[forecast_date, 'forecast'] = prediction
+            # reshape so that one sample is represented as a 2D array
+            # Reshape your data either using array.reshape(-1, 1) if your data has a single feature
+            # or array.reshape(1, -1) if it contains a single sample.
+
+

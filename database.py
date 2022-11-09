@@ -173,7 +173,7 @@ def fill_sql_from_yahoo(conn, length=2, start_date=None, end_date=None,
 
 
 def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each=True, return_whole=True,
-                      verbose=False):
+                      verbose=True):
     """pulls all data form a given sql table EVEN IF stock_names IS NOT None!!!
 	(1) sets it to stock.data (if set_data=True)
 	(2) returns the whole sql table as a df (if return_whole = True)
@@ -199,6 +199,8 @@ def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each
         print("pulling data")
     result = conn.execute(f"SHOW COLUMNS FROM {sql_table}").fetchall()
     database_columns = [x[0] for x in result]
+    if verbose:
+        print(f'{sql_table} has columns:', database_columns)
     if stock_names:
         total_df = conn.execute(f"SELECT * FROM {sql_table} WHERE ticker IN {sql_names}").fetchall()
     else:
@@ -208,6 +210,8 @@ def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each
     total_df.loc[:, 'date_'] = pd.to_datetime(total_df.loc[:, 'date_'])
     total_df.set_index('date_', inplace=True)
     total_df['date_'] = total_df.index.copy()
+    if verbose:
+        print('total_df successfully pulled')
     if set_each:
         start_time = time.time()
         for stock in stock_class.Stock.stock_list:

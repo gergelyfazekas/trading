@@ -120,6 +120,12 @@ def stationary_maker(input_series, p_val=0.05, maxlag=5, verbose=False):
     p_val: p-value below which reject H0
     """
     if isinstance(input_series, (pd.DataFrame, pd.Series)):
+        # input series is almost or totally constant over the period
+        if len(set(input_series)) < 5:
+            if verbose:
+                print('constant series, no differencing')
+            return input_series
+
         if adfuller(input_series, maxlag=maxlag)[1] < p_val:
             if verbose:
                 print('no differencing')
