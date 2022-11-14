@@ -54,9 +54,9 @@ def run_neat(config_file, max_gen=300,
 
         for genome_id, genome in genomes:
             genome_portfolio = Portfolio(genome=genome, cash=cash)
+            net = neat.nn.FeedForwardNetwork.create(genome, config)
             for current_date in training_data.index.unique():
                 for stock in stocks:
-                    net = neat.nn.FeedForwardNetwork.create(genome, config)
                     df = training_data[training_data['ticker'] == stock.name].loc[
                         current_date, ["vol_1", "vol_2", "close_1", "close_2"]]
                     output = net.activate(list(df))
