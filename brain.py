@@ -10,18 +10,30 @@ import os
 from portfolio_class import Portfolio
 import pandas as pd
 import database
+import configparser
 
 
-def run_neat(config_file, max_gen=300,
-             cash=500, pickeled_df_name='df.pickle',
-             stock_names = ['AAPL', 'MSFT'], threshold=0.05):
+def shape_config_file(config_file, X_cols):
+    """rewrites the config file of the NEAT algorithm to be consistent with the current number of inputs
+    Should only be used inside run_neat
+    """
+    config_parser = configparser.ConfigParser()
+    config_parser.read('neat_config.txt')
+    config_parser['DefaultGenome']['num_inputs'] = str(len(X_cols))
+    with open(config_file, 'w') as c_file:
+        config_parser.write(c_file)
 
-    with open(pickeled_df_name, "rb") as f:
-        training_data = pickle.load(f)
-        training_data.sort_values(by='date_', inplace=True)
-        training_data = training_data.iloc[:200, :]
 
-    Stock.clear_stock_list()
+def run_neat(config_file, pickeled_df, max_gen=300,
+             X_cols = ['forecast', 'sector_encoded', 'variance_100', 'variance_global'],
+             cash=500, stock_names=None, threshold=0.05):
+
+    shape_config_file(config_file, X_cols)
+
+    training_data = pickeled_df.copy()
+    # print(training_data)
+
+    # Stock.clear_stock_list()
 
     def eval_genomes(genomes, config):
         """evaluates every portfolio's genome by looping through
@@ -39,28 +51,35 @@ def run_neat(config_file, max_gen=300,
             cash_current -- the dollar value of a portfolio's budget
             """
 
-        for ticker in training_data['ticker'].unique():
-            if not stock_names:
-                Stock(ticker)
-            else:
-                if ticker in stock_names:
-                    Stock(ticker)
-        for stock in Stock.stock_list:
-            stock.set_data(training_data[training_data['ticker'] == stock.name])
-            stock.lowercase()
-            stock.set_index()
-        stocks = Stock.stock_list
-        training_data.set_index("date_", inplace=True)
+        # for ticker in training_data['ticker'].unique():
+        #     if not stock_names:
+        #         Stock(ticker)
+        #     else:
+        #         if ticker in stock_names:
+        #             Stock(ticker)
+        # for stock in Stock.stock_list:
+        #     stock.set_data(training_data[training_data['ticker'] == stock.name])
+        #     stock.lowercase()
+        #     stock.set_index()
 
+        if not Stock.stock_list:
+            if not stock_names:
+                Stock.set_each(training_data)
+
+        # training_data.set_index("date_", inplace=True)
         for genome_id, genome in genomes:
             genome_portfolio = Portfolio(genome=genome, cash=cash)
             net = neat.nn.FeedForwardNetwork.create(genome, config)
             for current_date in training_data.index.unique():
-                for stock in stocks:
+                # print('current_date', current_date)
+                for stock in Stock.stock_list:
+                    # print(stock.name)
                     df = training_data[training_data['ticker'] == stock.name].loc[
-                        current_date, ["vol_1", "vol_2", "close_1", "close_2"]]
+                        current_date, X_cols]
                     output = net.activate(list(df))
+                    # print('net output', output)
                     decision, proportion = output_to_decision(output[0], threshold=threshold)
+
                     # currently the models proportion is applied on the remaining cash if buy so that we can never go beyond budget
                     # for sell it is the proportion of the current amount (count) of the stock in the portfolio
                     # another way would be to apply the proportion on the current portfolio value of the stock in question
@@ -88,6 +107,9 @@ def run_neat(config_file, max_gen=300,
             #  We could also consider to terminate if genome.fitness reached a level
             genome_portfolio.update_total_portfolio_value(as_of=current_date)
             genome.fitness = genome_portfolio.total_portfolio_value
+            # print('genome_portfolio', genome_portfolio.balance)
+            print('log', genome_portfolio.log.head(10))
+
 
     # Load configuration.
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
@@ -122,7 +144,7 @@ def output_to_decision(output, threshold):
         decision = 'buy'
     else:
         decision = None
-    proportion = abs(output - 0.5)
+    proportion = 2 * abs(output - 0.5)
     return decision, proportion
 
 

@@ -30,7 +30,6 @@ class Portfolio:
             self.number_of_stocks = int
             self.sectors = list
             self.currencies = list
-            self.empirical_returns
             self.log = pd.DataFrame({'date_': [np.nan] * stock_class.PLACEHOLDER,
                                      'stock_name': [np.nan] * stock_class.PLACEHOLDER,
                                      'direction': [np.nan] * stock_class.PLACEHOLDER,
@@ -57,10 +56,10 @@ class Portfolio:
                 if value <= self.cash_current:
                     return True
                 else:
-                    print(f'Current cash ({self.cash_current}) not enough for value ({value})')
+                    # print(f'Current cash ({self.cash_current}) not enough for value ({value})')
                     return False
             else:
-                print(f'Negative value: {value}')
+                # print(f'Negative value: {value}')
                 return False
         else:
             raise TypeError('value not in (int, float)')
@@ -71,26 +70,26 @@ class Portfolio:
                 if abs(amount) <= any(self.balance.loc[self.balance['stock_name'] == stock.name, 'amount']):
                     return True
                 else:
-                    print(f'Balance contains less amount of {stock.name}'
-                          f' ({self.balance.loc[self.balance["stock_name"] == stock.name, "amount"]})'
-                          f' than the required ({abs(amount)})')
+                    # print(f'Balance contains less amount of {stock.name}'
+                    #       f' ({self.balance.loc[self.balance["stock_name"] == stock.name, "amount"]})'
+                    #       f' than the required ({abs(amount)})')
                     return False
             else:
-                print(f'Positive amount: {amount}')
-                print('here1')
+                # print(f'Positive amount: {amount}')
+                # print('here1')
                 return False
         elif isinstance(amount, pd.Series):
             if any(amount <= 0):
                 if any(abs(amount)) <= any(self.balance.loc[self.balance['stock_name'] == stock.name, 'amount']):
                     return True
                 else:
-                    print(f'Balance contains less amount of {stock.name}'
-                          f' ({self.balance.loc[self.balance["stock_name"] == stock.name, "amount"]})'
-                          f' than the required ({abs(amount)})')
+                    # print(f'Balance contains less amount of {stock.name}'
+                    #       f' ({self.balance.loc[self.balance["stock_name"] == stock.name, "amount"]})'
+                    #       f' than the required ({abs(amount)})')
                     return False
             else:
-                print(f'Positive amount: {amount}')
-                print('here2')
+                # print(f'Positive amount: {amount}')
+                # print('here2')
                 return False
         else:
             raise TypeError('value not in (int, float)')
@@ -243,7 +242,7 @@ class Portfolio:
             self.update_balance(stock, amount, price, value)
             self.update_log(as_of=as_of, stock=stock, direction='sell', amount=amount, price=price, value=value)
         else:
-            print('Do not have enough amount to sell')
+            # print('Do not have enough amount to sell')
             pass
 
 

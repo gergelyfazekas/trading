@@ -810,8 +810,9 @@ class Stock:
                 print('after', self.data.loc[current_date, ['tech_strong', 'tech_medium']])
                 print(" - - - - - - - - - - - ")
 
-    def generate_forecast(self, label_str, method, skip_cols, init_size=200, verbose=False, **kwargs):
+    def generate_simple_forecast(self, label_str, method, skip_cols, init_size=200, verbose=False, **kwargs):
         """Generates forecast for the next day with fitting the regressor to a growing lice of the data
+        This can only be used for elementary/simple/linear forecasts that will be combined with boosting later
 
         label_str: the name of the label as a string
         method: one function from forecast.py
@@ -824,19 +825,9 @@ class Stock:
         so for a specific date: regress label_stock_return on stock_return, lag_stock_return, lag2_stock_return ...
 
         """
-        if verbose:
-            print(self.name)
-
-        if 'forecast' not in self.data.columns:
-            self.data['forecast'] = np.nan
-
-        if 'forecast' not in skip_cols:
-            skip_cols.append('forecast')
-
         for row in range(init_size, len(self.data.index)):
             current_date = self.data.index[row]
-            if verbose:
-                print('current_date', current_date)
+
 
             # relevant_data only contains the X,y pairs needed for fitting and forecasting
             relevant_data = self.data.drop(skip_cols, axis=1, errors='ignore')
@@ -862,6 +853,8 @@ class Stock:
 
     @classmethod
     def cross_validate(cls, total_df, label_str, skip_cols, method, init_ratio=0.99, **kwargs):
+        """do not include the label in skip_cols"""
+
         if 'forecast' not in total_df.columns:
             total_df['forecast'] = np.nan
 
@@ -875,8 +868,8 @@ class Stock:
         init_date = total_df.index[init_size]
         size = len(total_df.loc[:init_date, :])
 
-        for row in range(size, len(total_df.index)):
-            current_date = total_df.index[row]
+        for current_date in total_df['date_'].loc[init_date:].unique():
+            print('current_date', current_date)
             # forecast date is the second element (1st index) of the unique upcoming days
             try:
                 forecast_date = total_df['date_'].loc[current_date:].unique()[1]
@@ -906,6 +899,7 @@ class Stock:
                 new_observation_X = np.array(new_observation_X).reshape(1, -1)
             prediction = model.predict(new_observation_X)
             total_df.loc[forecast_date, 'forecast'] = prediction
+            print(total_df.loc[forecast_date, 'forecast'])
             # reshape so that one sample is represented as a 2D array
             # Reshape your data either using array.reshape(-1, 1) if your data has a single feature
             # or array.reshape(1, -1) if it contains a single sample.

@@ -85,10 +85,12 @@ def hist_gradient_booster(training_data, label_str, **kwargs):
 
 
 def gradient_booster(training_data, label_str, **kwargs):
-    """gradient boosting using native NaN handling
-    categorical features have to be set in pd.DataFrame as categorical: total_df['sector_encoded'].astype("category")
-    **kwargs are passed to HistGradBoost:
-        except categorical_features which is created inside this function and should not be passed among kwargs!!
+    """gradient boosting
+
+    possible parameters:
+    n_estimators: boosting stages to perform
+    subsample: fraction of samples to fit each base learner, values smaller than 1 result in stochastic gradient descent
+    min_samples_leaf
     """
     X = training_data.loc[:, training_data.columns != label_str].copy()
     y = pd.Series(training_data.loc[:, label_str].copy())
