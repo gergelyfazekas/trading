@@ -9,6 +9,8 @@ import pandas as pd
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf
 import math
+import cProfile
+import pstats
 
 
 def tune_tech_levels(from_date, to_date, stocks, param_space, search="grid"):
@@ -209,3 +211,13 @@ def closest_number(num, lst):
         if abs(num-elem) < abs(num-curr):
             curr = elem
     return curr
+
+
+def profiler(func, **kwargs):
+    with cProfile.Profile() as pr:
+        result = func(**kwargs)
+    stats = pstats.Stats(pr)
+    stats.sort_stats(pstats.SortKey.TIME)
+    stats.print_stats()
+    return result
+

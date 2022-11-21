@@ -208,31 +208,32 @@ class Stock:
 
 
     @classmethod
-    def generate_ranking(cls, true_ranking=False, label_name='label_minmax_10'):
+    def generate_ranking(cls, total_df, true_ranking=False, label_name='label_minmax_10'):
         """generates ranking for all stocks in stock_list for every day
         args:
         true_ranking: if True, calculates the ranking based on the true label and not the forecast
         label_name: one of 'label_minmax', label_max', 'label_avg', only used if true_ranking is True
         """
 
-        first_date = datetime.date.today()
-        last_date = datetime.date(2000, 1, 1)
-        for stock in cls.stock_list:
-            stock.set_dates()
-            if stock.first_date < first_date:
-                first_date = stock.first_date
-            if stock.last_date > last_date:
-                last_date = stock.last_date
-        total_df = cls.aggregate_data()
+        # first_date = datetime.date.today()
+        # last_date = datetime.date(2000, 1, 1)
+        # for stock in cls.stock_list:
+        #     stock.set_dates()
+        #     if stock.first_date < first_date:
+        #         first_date = stock.first_date
+        #     if stock.last_date > last_date:
+        #         last_date = stock.last_date
+        # total_df = cls.aggregate_data()
 
-        if 'ranking' not in total_df.columns:
-            total_df['ranking'] = np.nan
-        else:
-            user_input = str(input('ranking already exists, want to overwrite: y/n'))
-            if user_input.upper() in ['YES', 'Y']:
-                pass
+        if not true_ranking:
+            if 'ranking' not in total_df.columns:
+                total_df['ranking'] = np.nan
             else:
-                raise InterruptedError
+                user_input = str(input('ranking already exists, want to overwrite: y/n'))
+                if user_input.upper() in ['YES', 'Y']:
+                    pass
+                else:
+                    raise InterruptedError
         if true_ranking:
             if 'true_ranking' not in total_df.columns:
                 total_df['true_ranking'] = np.nan
@@ -244,13 +245,14 @@ class Stock:
                     raise InterruptedError
 
         for current_date in total_df.index.unique():
-            if any(pd.isna(total_df.loc[total_df.index == current_date, 'forecast'])):
-                total_df.loc[current_date, 'ranking'] = np.nan
-            else:
-                try:
-                    total_df.loc[current_date, 'ranking'] = total_df.loc[current_date, 'forecast'].rank(ascending=False)
-                except AttributeError:
-                    total_df.loc[current_date, 'ranking'] = 1
+            if not true_ranking:
+                if any(pd.isna(total_df.loc[total_df.index == current_date, 'forecast'])):
+                    total_df.loc[current_date, 'ranking'] = np.nan
+                else:
+                    try:
+                        total_df.loc[current_date, 'ranking'] = total_df.loc[current_date, 'forecast'].rank(ascending=False)
+                    except AttributeError:
+                        total_df.loc[current_date, 'ranking'] = 1
             if true_ranking:
                 if any(pd.isna(total_df.loc[total_df.index == current_date, label_name])):
                     total_df.loc[current_date, 'true_ranking'] = np.nan
@@ -267,7 +269,7 @@ class Stock:
             stock.set_index()
 
     @classmethod
-    def ranking_to_dummy(cls, threshold1=5, threshold2=10, threshold3=15, true_ranking=False):
+    def ranking_to_dummy(cls, threshold1=10, threshold2=20, threshold3=30, true_ranking=False):
         """turns ranking into dummy variables for all stocks in stock_list based on <= thresholds
            the new columns in stock.data are named as cat_1, cat_2, cat_3
         args:
@@ -861,7 +863,6 @@ class Stock:
         if 'forecast' not in skip_cols:
             skip_cols.append('forecast')
 
-
         if not 0 < init_ratio < 1:
             raise ValueError("init_ratio should be between 0 and 1")
         init_size = round(len(total_df.index) * init_ratio)
@@ -904,4 +905,52 @@ class Stock:
             # Reshape your data either using array.reshape(-1, 1) if your data has a single feature
             # or array.reshape(1, -1) if it contains a single sample.
 
+    @classmethod
+    def fit_predict(cls, total_df, label_str, skip_cols, method, init_ratio=0.99, **kwargs):
+        """do not include the label in skip_cols"""
 
+        if 'forecast' not in total_df.columns:
+            total_df['forecast'] = np.nan
+
+        if 'forecast' not in skip_cols:
+            skip_cols.append('forecast')
+
+        if not 0 < init_ratio < 1:
+            raise ValueError("init_ratio should be between 0 and 1")
+        init_size = round(len(total_df.index) * init_ratio)
+        init_date = total_df.index[init_size]
+        print('init_date', init_date)
+
+        # dropping columns not needed for forecasting
+        relevant_df = total_df.drop(skip_cols, axis=1, errors='ignore').copy()
+
+        # gradient_booster cannot handle NaNs but has feature_importance
+        if method.__name__ == 'gradient_booster':
+            categorical_df = relevant_df.select_dtypes(include="category")
+            for col_name in categorical_df.columns:
+                categorical_df[col_name] = categorical_df[col_name].astype('object')
+            relevant_df.drop(relevant_df.select_dtypes(include="category"), axis=1, inplace=True)
+            relevant_df.fillna(100000, inplace=True)
+
+
+        training_slice = relevant_df.loc[:init_date, :].copy()
+        print('last date of training_slice', training_slice.iloc[-1, :])
+        # fitting
+        model = method(training_slice, label_str, **kwargs)
+        print('unique_dates', total_df['date_'].loc[init_date:].unique())
+        for current_date in total_df['date_'].loc[init_date:].unique():
+            print('current_date', current_date)
+            # forecast date is the second element (1st index) of the unique upcoming days
+            try:
+                forecast_date = current_date
+            except IndexError:
+                print('Done')
+                return model
+
+            # forecasting
+            new_observation_X = relevant_df.loc[forecast_date, relevant_df.columns != label_str].copy()
+            if len(new_observation_X.index) == 1:
+                new_observation_X = np.array(new_observation_X).reshape(1, -1)
+            prediction = model.predict(new_observation_X)
+            total_df.loc[forecast_date, 'forecast'] = prediction
+            # print(total_df.loc[forecast_date, 'forecast'])

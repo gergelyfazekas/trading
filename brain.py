@@ -13,24 +13,27 @@ import database
 import configparser
 
 
-def shape_config_file(config_file, X_cols):
+def shape_config_file(config_file, X_cols, portfolio_attributes):
     """rewrites the config file of the NEAT algorithm to be consistent with the current number of inputs
     Should only be used inside run_neat
     """
     config_parser = configparser.ConfigParser()
     config_parser.read('neat_config.txt')
-    config_parser['DefaultGenome']['num_inputs'] = str(len(X_cols))
+    len_X = len(X_cols)
+    len_portf = len(portfolio_attributes)
+    config_parser['DefaultGenome']['num_inputs'] = str((len_X+len_portf))
     with open(config_file, 'w') as c_file:
         config_parser.write(c_file)
 
 
-def run_neat(config_file, pickeled_df, max_gen=300,
-             X_cols = ['forecast', 'sector_encoded', 'variance_100', 'variance_global'],
-             cash=500, stock_names=None, threshold=0.05):
+def run_neat(config_file, total_df, max_gen=300,
+             X_cols=['forecast', 'sector_encoded', 'variance_100', 'variance_global'],
+             portfolio_attributes=["proportion_invested"],
+             cash=500, stock_names=None, threshold=0.05, verbose=False):
 
-    shape_config_file(config_file, X_cols)
+    shape_config_file(config_file, X_cols, portfolio_attributes)
 
-    training_data = pickeled_df.copy()
+    training_data = total_df.copy()
     # print(training_data)
 
     # Stock.clear_stock_list()
@@ -73,9 +76,12 @@ def run_neat(config_file, pickeled_df, max_gen=300,
             for current_date in training_data.index.unique():
                 # print('current_date', current_date)
                 for stock in Stock.stock_list:
-                    # print(stock.name)
-                    df = training_data[training_data['ticker'] == stock.name].loc[
-                        current_date, X_cols]
+                    try:
+                        df = training_data[training_data['ticker'] == stock.name].loc[current_date, X_cols]
+                        for item in portfolio_attributes:
+                            df[item] = vars(genome_portfolio)[item]
+                    except KeyError:
+                        continue
                     output = net.activate(list(df))
                     # print('net output', output)
                     decision, proportion = output_to_decision(output[0], threshold=threshold)
@@ -86,12 +92,15 @@ def run_neat(config_file, pickeled_df, max_gen=300,
                     # but then we would have to discourage the behaviour of going beyond budget by reducing the fitness funciton
                     # if genome_portfolio.got_enough_cash returns False
                     if decision == 'buy':
+                        # amount is the number of stocks to buy, value is the amount * price
                         amount = (proportion * genome_portfolio.cash_current) / \
                                  training_data[training_data['ticker'] == stock.name].loc[current_date, "close"]
                         genome_portfolio.buy(stock=stock, amount=amount, as_of=current_date)
                     elif decision == 'sell':
-                        amount = -1 * ((proportion * genome_portfolio.get_stock_amount(stock)) / \
-                                       training_data[training_data['ticker'] == stock.name].loc[current_date, "close"])
+                        # amount is the number of stocks to sell (negative if sell), value is the amount * price
+                        # amount = -1 * ((proportion * genome_portfolio.get_stock_amount(stock)) / \
+                        #                training_data[training_data['ticker'] == stock.name].loc[current_date, "close"])
+                        amount = -1 * (proportion * genome_portfolio.get_stock_amount(stock))
                         genome_portfolio.sell(stock=stock, amount=amount, as_of=current_date)
                     elif not decision:
                         # do nothing within [0.5-threshold , 0.5+threshold]
@@ -107,8 +116,10 @@ def run_neat(config_file, pickeled_df, max_gen=300,
             #  We could also consider to terminate if genome.fitness reached a level
             genome_portfolio.update_total_portfolio_value(as_of=current_date)
             genome.fitness = genome_portfolio.total_portfolio_value
-            # print('genome_portfolio', genome_portfolio.balance)
-            print('log', genome_portfolio.log.head(10))
+            if verbose:
+                print(current_date)
+                print('genome fitness', genome.fitness)
+                print('log', genome_portfolio.log.head(10))
 
 
     # Load configuration.

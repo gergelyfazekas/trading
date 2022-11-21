@@ -42,7 +42,7 @@ class Portfolio:
                                          'value': [np.nan] * stock_class.PLACEHOLDER,
                                          'sector': [np.nan] * stock_class.PLACEHOLDER})
             self.total_portfolio_value = self.cash_init
-            self.proportion_invested = self.cash_spent / self.cash_init
+            self.proportion_invested = 0
 
     def __eq__(self, other):
         if self.genome == other.genome and self.cash_init == other.cash_init and self.exchange == other.exchange:
@@ -115,6 +115,9 @@ class Portfolio:
         """accepts negative value as well meaning that we get back cash by selling a stock"""
         if isinstance(value, (float, int)):
             self.cash_spent += value
+
+    def update_proportion_invested(self):
+        self.proportion_invested = self.cash_spent / self.cash_init
 
     def update_total_portfolio_value(self, as_of):
         value_per_stock = []
@@ -204,8 +207,8 @@ class Portfolio:
         self.number_of_stocks = len(self.balance['stock_name'].unique())
 
     def buy(self, stock, amount, as_of):
-        if not isinstance(stock, Stock):
-            raise TypeError(f'Not Stock instance! type given: {type(stock)}')
+        # if not isinstance(stock, Stock):
+        #     raise TypeError(f'Not Stock instance! type given: {type(stock)}')
         if not isinstance(as_of, datetime.date):
             raise TypeError(f'as_of should be datetime.date and not {type(as_of)}')
 
@@ -216,6 +219,7 @@ class Portfolio:
             if self.got_enough_cash(value):
                 self.deduct_cash(value)
                 self.update_cash_spent(value)
+                self.update_proportion_invested()
                 self.update_balance(stock, amount, price, value)
                 self.update_log(as_of=as_of, stock=stock, direction='buy', amount=amount, price=price, value=value)
 
@@ -236,9 +240,11 @@ class Portfolio:
         else:
             raise ValueError('amount not int/float/pd.Series')
 
+        # amount is negative, value us negative, price is positive
         if self.got_enough_amount(stock, amount):
             self.add_cash(abs(value))
             self.update_cash_spent(value)
+            self.update_proportion_invested()
             self.update_balance(stock, amount, price, value)
             self.update_log(as_of=as_of, stock=stock, direction='sell', amount=amount, price=price, value=value)
         else:
