@@ -71,6 +71,7 @@ def run_neat(config_file, total_df, max_gen=300,
 
         # training_data.set_index("date_", inplace=True)
         for genome_id, genome in genomes:
+            genome.fitness = 0
             genome_portfolio = Portfolio(genome=genome, cash=cash)
             net = neat.nn.FeedForwardNetwork.create(genome, config)
             for current_date in training_data.index.unique():
@@ -107,15 +108,24 @@ def run_neat(config_file, total_df, max_gen=300,
                         pass
                     else:
                         raise NotImplementedError
-            # fitness = portfolio value at the last date of the training set
-            # other option would be to check the portfolios value at the end of every year:
-            #   - and reduce the initial 500 with the place of the genome compared to the others
-            #   - so if the genome is the best every year it gets 500 - (10 years * 1st place) = 490
-            #   - if it is the 3rd every year then 500 - 10*3 = 470 ...
-            #   - this fitness function would incentivize interim good performance
-            #  We could also consider to terminate if genome.fitness reached a level
-            genome_portfolio.update_total_portfolio_value(as_of=current_date)
-            genome.fitness = genome_portfolio.total_portfolio_value
+                # End-of-day update
+                genome_portfolio.update_balance_price(as_of=current_date)
+                genome_portfolio.update_total_portfolio_value()
+                genome_portfolio.calc_entropy_stock()
+                genome_portfolio.calc_entropy_sector()
+
+                # Fitness update daily so that the diversification is always held high
+                # entropy_sector is maximum 2.3 since we have fix 10 sectors
+                # entropy_stock can be large so we have to cap it not to suppress the total_value in the fitness
+                # 2.5 can be achieved with a uniformly weighted 13 stock portfolio, above that we don't differentiate
+                genome.fitness += max(genome_portfolio.entropy_stock, 2.5) + genome_portfolio.entropy_sector
+
+            # Fitness calculation: total_value + number of trades conducted + daily entropy
+            # genome_portfolio.update_total_portfolio_value(as_of=current_date)
+            if genome_portfolio.log.last_valid_index():
+                genome.fitness = genome_portfolio.total_portfolio_value + genome_portfolio.log.last_valid_index()
+            else:
+                genome.fitness = genome_portfolio.total_portfolio_value
             if verbose:
                 print(current_date)
                 print('genome fitness', genome.fitness)

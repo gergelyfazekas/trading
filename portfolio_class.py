@@ -1,7 +1,9 @@
 import concurrent.futures
 import datetime
 # turn of FutureWarning
+import math
 import warnings
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 from pandas_datareader import data as wb
 import pandas as pd
@@ -43,6 +45,8 @@ class Portfolio:
                                          'sector': [np.nan] * stock_class.PLACEHOLDER})
             self.total_portfolio_value = self.cash_init
             self.proportion_invested = 0
+            self.entropy_stock = 0
+            self.entropy_sector = 0
 
     def __eq__(self, other):
         if self.genome == other.genome and self.cash_init == other.cash_init and self.exchange == other.exchange:
@@ -100,7 +104,6 @@ class Portfolio:
         else:
             return self.balance.loc[self.balance['stock_name'] == stock.name, 'amount']
 
-
     def deduct_cash(self, amount):
         if isinstance(amount, (float, int)):
             if amount >= 0:
@@ -119,7 +122,7 @@ class Portfolio:
     def update_proportion_invested(self):
         self.proportion_invested = self.cash_spent / self.cash_init
 
-    def update_total_portfolio_value(self, as_of):
+    def update_total_portfolio_value_old(self, as_of):
         value_per_stock = []
         if self.balance.last_valid_index() or self.balance.last_valid_index() == 0:
             for row in range(len(self.balance.index)):
@@ -133,7 +136,13 @@ class Portfolio:
         else:
             self.total_portfolio_value = self.cash_init
 
-    def update_balance(self, stock, amount, price, value, sector=np.nan):
+    def update_total_portfolio_value(self):
+        if self.balance.last_valid_index():
+            self.total_portfolio_value = self.balance['value'].sum()
+        else:
+            self.total_portfolio_value = self.cash_init
+
+    def update_balance(self, stock, amount, price, value, sector):
         non_zero = False
         if isinstance(np.round(abs(amount), 2), (int, float)):
             if not np.round(abs(amount), 2) == 0:
@@ -157,7 +166,7 @@ class Portfolio:
                 if isinstance(last_idx, (int, float)):
                     self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('stock_name')] = stock.name
                     self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('amount')] = amount
-                    self.balance.iloc[last_idx + 1,self.balance.columns.get_loc('price')] = price
+                    self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('price')] = price
                     self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('value')] = value
                     self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('sector')] = sector
 
@@ -203,8 +212,23 @@ class Portfolio:
             else:
                 raise NotImplementedError
 
+    def update_balance_price(self, as_of):
+        if self.balance.last_valid_index():
+            for stock_name in self.balance['stock_name']:
+                if isinstance(stock_name, str):
+                    stock = Stock.fetch_stock(stock_name)
+                    price = stock.get_price(as_of)
+                    # update price
+                    self.balance.loc[self.balance['stock_name'] == stock_name, "price"] = price
+                    # update value = price * amount
+                    self.balance.loc[self.balance['stock_name'] == stock_name, "value"] = \
+                        price * self.balance.loc[self.balance['stock_name'] == stock_name, "amount"]
+
     def update_number_of_stocks(self):
         self.number_of_stocks = len(self.balance['stock_name'].unique())
+
+    def update_sectors(self):
+        self.sectors = list(self.balance['sector'].unique())
 
     def buy(self, stock, amount, as_of):
         # if not isinstance(stock, Stock):
@@ -220,7 +244,7 @@ class Portfolio:
                 self.deduct_cash(value)
                 self.update_cash_spent(value)
                 self.update_proportion_invested()
-                self.update_balance(stock, amount, price, value)
+                self.update_balance(stock, amount, price, value, stock.sector)
                 self.update_log(as_of=as_of, stock=stock, direction='buy', amount=amount, price=price, value=value)
 
         else:
@@ -245,12 +269,11 @@ class Portfolio:
             self.add_cash(abs(value))
             self.update_cash_spent(value)
             self.update_proportion_invested()
-            self.update_balance(stock, amount, price, value)
+            self.update_balance(stock, amount, price, value, stock.sector)
             self.update_log(as_of=as_of, stock=stock, direction='sell', amount=amount, price=price, value=value)
         else:
             # print('Do not have enough amount to sell')
             pass
-
 
     def calc_variance(self, lookback=None):
         """calculates total portfolio variance based on daily portfolio returns
@@ -289,3 +312,15 @@ class Portfolio:
                 self.data[f'variance_{lookback}'] = self.data['stock_return'].rolling(lookback).var()
                 self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
                                                        self.data['variance_global'], inplace=True)
+
+
+    def calc_entropy_stock(self):
+        total_value = self.balance['value'].sum()
+        weights = self.balance['value'] / total_value
+        self.entropy_stock = -1 * np.sum(weights * np.log(weights))
+
+    def calc_entropy_sector(self):
+        sector_values = list(self.balance.groupby(by="sector")['value'].sum())
+        total_value = self.balance['value'].sum()
+        weights = sector_values / total_value
+        self.entropy_sector = -1 * np.sum(weights * np.log(weights))

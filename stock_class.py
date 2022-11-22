@@ -205,6 +205,7 @@ class Stock:
             stock.lowercase()
             stock.set_index()
             stock.set_dates()
+            stock.set_sector()
 
 
     @classmethod
@@ -424,7 +425,10 @@ class Stock:
                                                        self.data['variance_global'], inplace=True)
 
     def set_sector(self):
-        pass
+        if self.data['sector'][0]:
+            self.sector = self.data['sector'][0]
+        else:
+            self.sector = "Unknown"
 
     def set_yahoo_pull_start_date(self, new_date):
         self.yahoo_pull_start_date = new_date
