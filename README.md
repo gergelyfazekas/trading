@@ -16,7 +16,7 @@ all listed on the NASDAQ. The price frequency is daily, so that the total number
 **Code:**
 
 All .py files only contain functions and classes and cannot be run on their own. Since most of the analysis is done on a one-off basis 
-(e.g. there is no need to calculate the returns of a stock multiple times) these functions are imported to jupyter notebooks to create adhoc pipelines.
+(e.g. there is no need to calculate the historical returns of a stock multiple times) these functions are imported to jupyter notebooks to create adhoc pipelines.
 
 - portfolio_class.py and stock_class.py establish classes for Stock and Portfolio objects. Methods of a Stock instance are used to calculate time series properties and technical indicators. Methods of a Portfolio instance are used to derive portfolio related attributes such as keeping track of the current portfolio, cash/invested balance, rate of diversification etc. 
 - database.py is a collection of yahoo finance related querying functions and sql oriented functions, this script is used together with stock_class.py
