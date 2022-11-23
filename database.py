@@ -193,7 +193,7 @@ def pull_all_data_sql(conn, sql_table='stock_prices', stock_names=None, set_each
     if stock_names:
         sql_names = [ticker for ticker in stock_names if ticker in sql_names]
     stock_class.Stock.clear_stock_list()
-    stock_class.Stock.create_stock_list_sql(sql_names)
+    stock_class.Stock.create_stock_list(sql_names)
     sql_names = tuple(sql_names)
     if verbose:
         print("pulling data")

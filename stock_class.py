@@ -22,6 +22,7 @@ PLACEHOLDER = 1000
 class Stock:
     # stock_list contains Stock instances not just names
     stock_list = []
+    stock_dict = {}
 
     def __init__(self, name):
         # stock related attributes
@@ -56,7 +57,7 @@ class Stock:
         print(f"Name: {self.name}")
 
     def __repr__(self):
-        return f"Stock(name={self.name})"
+        return f"Stock(name='{self.name}')"
 
     def __eq__(self, other):
         if self.name == other.name and len(self.data.index) == len(other.data.index) and np.all(
@@ -64,6 +65,10 @@ class Stock:
             return True
         else:
             return False
+
+    @classmethod
+    def get(cls, ticker):
+        return cls.stock_dict[ticker]
 
     @staticmethod
     def create_top_tickers_csv(filename="nasdaq_tickers.csv", number=30, sort_by="Market Cap", asc=False):
@@ -83,9 +88,10 @@ class Stock:
             Stock(name=ticker)
 
     @classmethod
-    def create_stock_list_sql(cls, ticker_list):
+    def create_stock_list(cls, ticker_list):
         for ticker in ticker_list:
             Stock(name=ticker)
+        cls.stock_dict = dict(zip(ticker_list, cls.stock_list))
 
     @classmethod
     def print_stock_names(cls):
@@ -124,7 +130,6 @@ class Stock:
     def drop_stock(cls, name):
         idx = cls.get_stock_names().index(name)
         cls.stock_list.pop(idx)
-
 
     @classmethod
     def fetch_stock(cls, name):
@@ -198,7 +203,7 @@ class Stock:
         """
         stock_names = list(total_df['ticker'].unique())
         cls.clear_stock_list()
-        cls.create_stock_list_sql(stock_names)
+        cls.create_stock_list(stock_names)
 
         for stock in cls.stock_list:
             stock.set_data(total_df[total_df['ticker'] == stock.name].copy())
@@ -206,7 +211,6 @@ class Stock:
             stock.set_index()
             stock.set_dates()
             stock.set_sector()
-
 
     @classmethod
     def generate_ranking(cls, total_df, true_ranking=False, label_name='label_minmax_10'):
@@ -251,7 +255,8 @@ class Stock:
                     total_df.loc[current_date, 'ranking'] = np.nan
                 else:
                     try:
-                        total_df.loc[current_date, 'ranking'] = total_df.loc[current_date, 'forecast'].rank(ascending=False)
+                        total_df.loc[current_date, 'ranking'] = total_df.loc[current_date, 'forecast'].rank(
+                            ascending=False)
                     except AttributeError:
                         total_df.loc[current_date, 'ranking'] = 1
             if true_ranking:
@@ -480,7 +485,8 @@ class Stock:
             label.append(list(padding))
 
         if f'label_{method}_{look_ahead_range}' in self.data.columns:
-            user_input = str(input(f'label_{method}_{look_ahead_range} already in {self.name}.data, want to replace: y/n'))
+            user_input = str(
+                input(f'label_{method}_{look_ahead_range} already in {self.name}.data, want to replace: y/n'))
             if user_input.upper() in ['YES', 'Y']:
                 self.data[f'label_{method}_{look_ahead_range}'] = label
         else:
@@ -508,7 +514,6 @@ class Stock:
                     self.data[f'sma_{period}'] = self.data['close'].rolling(window=period).mean()
                 else:
                     raise InterruptedError
-
 
     def sma_cross(self, sma_short_days, sma_long_days):
         if not f'sma_{sma_long_days}' in self.data.columns:
@@ -550,13 +555,12 @@ class Stock:
                 if f'{col}_distance' not in self.data.columns:
                     self.data[f'{col}_distance'] = np.nan
                 self.data.loc[self.last_date, f'{col}_distance'] = \
-                    (current_price-self.data.loc[self.last_date, col])/current_price
+                    (current_price - self.data.loc[self.last_date, col]) / current_price
         else:
             # percentage distance from close price
             for col in sma_cols:
                 self.data[f'{col}_distance'] = \
-                    (self.data['close']-self.data[col])/self.data['close']
-
+                    (self.data['close'] - self.data[col]) / self.data['close']
 
     def rsi_calc(self, lookback=14):
         diffs = self.data['close'].diff()
@@ -834,7 +838,6 @@ class Stock:
         for row in range(init_size, len(self.data.index)):
             current_date = self.data.index[row]
 
-
             # relevant_data only contains the X,y pairs needed for fitting and forecasting
             relevant_data = self.data.drop(skip_cols, axis=1, errors='ignore')
             if verbose:
@@ -910,14 +913,14 @@ class Stock:
             # or array.reshape(1, -1) if it contains a single sample.
 
     @classmethod
-    def fit_predict(cls, total_df, label_str, skip_cols, method, init_ratio=0.99, **kwargs):
+    def fit_predict(cls, total_df, label_str, predict_col_name, skip_cols, method, init_ratio=0.99, **kwargs):
         """do not include the label in skip_cols"""
 
-        if 'forecast' not in total_df.columns:
-            total_df['forecast'] = np.nan
+        if predict_col_name not in total_df.columns:
+            total_df[predict_col_name] = np.nan
 
-        if 'forecast' not in skip_cols:
-            skip_cols.append('forecast')
+        if predict_col_name not in skip_cols:
+            skip_cols.append(predict_col_name)
 
         if not 0 < init_ratio < 1:
             raise ValueError("init_ratio should be between 0 and 1")
@@ -935,7 +938,6 @@ class Stock:
                 categorical_df[col_name] = categorical_df[col_name].astype('object')
             relevant_df.drop(relevant_df.select_dtypes(include="category"), axis=1, inplace=True)
             relevant_df.fillna(100000, inplace=True)
-
 
         training_slice = relevant_df.loc[:init_date, :].copy()
         print('last date of training_slice', training_slice.iloc[-1, :])
@@ -956,5 +958,5 @@ class Stock:
             if len(new_observation_X.index) == 1:
                 new_observation_X = np.array(new_observation_X).reshape(1, -1)
             prediction = model.predict(new_observation_X)
-            total_df.loc[forecast_date, 'forecast'] = prediction
-            # print(total_df.loc[forecast_date, 'forecast'])
+            total_df.loc[forecast_date, predict_col_name] = prediction
+            # print(total_df.loc[forecast_date, predict_col_name])

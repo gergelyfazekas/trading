@@ -11,6 +11,7 @@ from portfolio_class import Portfolio
 import pandas as pd
 import database
 import configparser
+import random
 
 
 def shape_config_file(config_file, X_cols, portfolio_attributes):
@@ -26,14 +27,15 @@ def shape_config_file(config_file, X_cols, portfolio_attributes):
         config_parser.write(c_file)
 
 
-def run_neat(config_file, total_df, max_gen=300,
-             X_cols=['forecast', 'sector_encoded', 'variance_100', 'variance_global'],
+def run_neat(config_file, total_df, restore_checkpoint_name=None, generation_interval=5, time_seconds_interval=None,
+             max_gen=300, X_cols=['forecast', 'sector_encoded', 'variance_100', 'variance_global'],
              portfolio_attributes=["proportion_invested"],
-             cash=500, stock_names=None, threshold=0.05, verbose=False):
+             cash=500, threshold=0.05, verbose=False):
 
     shape_config_file(config_file, X_cols, portfolio_attributes)
 
     training_data = total_df.copy()
+    X_cols = [col.lower() for col in X_cols]
     # print(training_data)
 
     # Stock.clear_stock_list()
@@ -54,44 +56,26 @@ def run_neat(config_file, total_df, max_gen=300,
             cash_current -- the dollar value of a portfolio's budget
             """
 
-        # for ticker in training_data['ticker'].unique():
-        #     if not stock_names:
-        #         Stock(ticker)
-        #     else:
-        #         if ticker in stock_names:
-        #             Stock(ticker)
-        # for stock in Stock.stock_list:
-        #     stock.set_data(training_data[training_data['ticker'] == stock.name])
-        #     stock.lowercase()
-        #     stock.set_index()
+        Stock.set_each(training_data)
 
-        if not Stock.stock_list:
-            if not stock_names:
-                Stock.set_each(training_data)
-
-        # training_data.set_index("date_", inplace=True)
         for genome_id, genome in genomes:
             genome.fitness = 0
             genome_portfolio = Portfolio(genome=genome, cash=cash)
             net = neat.nn.FeedForwardNetwork.create(genome, config)
             for current_date in training_data.index.unique():
-                # print('current_date', current_date)
+                # shuffle
+                random.shuffle(Stock.stock_list)
+
                 for stock in Stock.stock_list:
                     try:
-                        df = training_data[training_data['ticker'] == stock.name].loc[current_date, X_cols]
+                        df = stock.data.loc[current_date, X_cols]
                         for item in portfolio_attributes:
                             df[item] = vars(genome_portfolio)[item]
                     except KeyError:
                         continue
                     output = net.activate(list(df))
-                    # print('net output', output)
                     decision, proportion = output_to_decision(output[0], threshold=threshold)
 
-                    # currently the models proportion is applied on the remaining cash if buy so that we can never go beyond budget
-                    # for sell it is the proportion of the current amount (count) of the stock in the portfolio
-                    # another way would be to apply the proportion on the current portfolio value of the stock in question
-                    # but then we would have to discourage the behaviour of going beyond budget by reducing the fitness funciton
-                    # if genome_portfolio.got_enough_cash returns False
                     if decision == 'buy':
                         # amount is the number of stocks to buy, value is the amount * price
                         amount = (proportion * genome_portfolio.cash_current) / \
@@ -138,13 +122,16 @@ def run_neat(config_file, total_df, max_gen=300,
                          config_file)
 
     # Create the population, which is the top-level object for a NEAT run.
-    p = neat.Population(config)
+    if restore_checkpoint_name:
+        p = neat.Checkpointer.restore_checkpoint(restore_checkpoint_name)
+    else:
+        p = neat.Population(config)
 
     # Add a stdout reporter to show progress in the terminal.
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    # p.add_reporter(neat.Checkpointer(1))
+    p.add_reporter(neat.Checkpointer(generation_interval=generation_interval, time_interval_seconds=time_seconds_interval))
 
     # Run for up to max_gen generations.
     winner = p.run(eval_genomes, max_gen)
