@@ -79,7 +79,7 @@ def run_neat(config_file, total_df, restore_checkpoint_name=None, generation_int
                     if decision == 'buy':
                         # amount is the number of stocks to buy, value is the amount * price
                         amount = (proportion * genome_portfolio.cash_current) / \
-                                 training_data[training_data['ticker'] == stock.name].loc[current_date, "close"]
+                                 stock.data.loc[current_date, "close"]
                         genome_portfolio.buy(stock=stock, amount=amount, as_of=current_date)
                     elif decision == 'sell':
                         # amount is the number of stocks to sell (negative if sell), value is the amount * price

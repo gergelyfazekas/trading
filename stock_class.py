@@ -110,6 +110,7 @@ class Stock:
     @classmethod
     def clear_stock_list(cls):
         cls.stock_list = []
+        cls.stock_dict = {}
 
     @classmethod
     def yahoo_pull_data_for_stock_list(cls):

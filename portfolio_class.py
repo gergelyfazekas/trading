@@ -216,7 +216,7 @@ class Portfolio:
         if self.balance.last_valid_index():
             for stock_name in self.balance['stock_name']:
                 if isinstance(stock_name, str):
-                    stock = Stock.fetch_stock(stock_name)
+                    stock = Stock.get(stock_name)
                     price = stock.get_price(as_of)
                     # update price
                     self.balance.loc[self.balance['stock_name'] == stock_name, "price"] = price
@@ -312,7 +312,6 @@ class Portfolio:
                 self.data[f'variance_{lookback}'] = self.data['stock_return'].rolling(lookback).var()
                 self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
                                                        self.data['variance_global'], inplace=True)
-
 
     def calc_entropy_stock(self):
         total_value = self.balance['value'].sum()
