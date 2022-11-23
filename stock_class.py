@@ -372,13 +372,13 @@ class Stock:
         self.data.rename(columns={'Adj Close': 'adj_close'}, inplace=True)
 
     def set_data(self, new_dataframe):
-        if not isinstance(new_dataframe, pd.DataFrame):
+        if type(new_dataframe) is not pd.DataFrame:
             print(new_dataframe)
             raise TypeError('new_dataframe: not pandas.dataframe')
         self.data = new_dataframe
 
     def set_dates(self):
-        if all([isinstance(self.data.index[0], datetime.date), isinstance(self.data.index[-1], datetime.date)]):
+        if all([type(self.data.index[0]) is datetime.date, type(self.data.index[-1]) is datetime.date]):
             self.first_date = self.data.index[0]
             self.last_date = self.data.index[-1]
         else:
@@ -582,12 +582,12 @@ class Stock:
         kwargs:
         1)tech_width -- own argument determining the width of a tech_level
         2)other kwargs passed to scipy.signal.find_peaks"""
-        if not isinstance(from_date, datetime.date):
+        if type(from_date) is not datetime.date:
             try:
                 from_date = datetime.date(from_date)
             except TypeError:
                 print(f'type of from_date: {type(from_date)}')
-        if not isinstance(to_date, datetime.date):
+        if type(to_date) is not datetime.date:
             try:
                 to_date = datetime.date(to_date)
             except TypeError:

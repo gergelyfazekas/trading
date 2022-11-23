@@ -86,7 +86,7 @@ def combine_lists(lst1, lst2):
 
 
 def flatten(list_of_lists, num_iter):
-    if not isinstance(num_iter, int):
+    if type(num_iter) is not int:
         raise ValueError('num_iter should be int')
     if num_iter == 0:
         return list_of_lists
@@ -100,11 +100,11 @@ def flatten(list_of_lists, num_iter):
 
             for sublist in list_of_lists:
                 # sublist is indeed a list: [(1,2),(3,4)]
-                if isinstance(sublist, (list, tuple)):
+                if type(sublist) in (list, tuple):
                     for item in sublist:
                         flat_list.append(item)
                 # sublist is actually just a number: [(1,2),3]
-                elif isinstance(sublist, (int, float)):
+                elif type(sublist) in (int, float):
                     flat_list.append(sublist)
             i += 1
         return flat_list
@@ -121,7 +121,7 @@ def stationary_maker(input_series, p_val=0.05, maxlag=5, verbose=False):
     input_series: a pd.Series or a list object
     p_val: p-value below which reject H0
     """
-    if isinstance(input_series, (pd.DataFrame, pd.Series)):
+    if type(input_series) in (pd.DataFrame, pd.Series):
         # input series is almost or totally constant over the period
         if len(set(input_series)) < 5:
             if verbose:
@@ -144,7 +144,7 @@ def stationary_maker(input_series, p_val=0.05, maxlag=5, verbose=False):
                     print('second differencing')
                 return second_diff
 
-    elif isinstance(input_series, list):
+    elif type(input_series) is list:
         input_series = pd.Series(input_series)
         stationary_maker(input_series, p_val)
     else:
@@ -157,10 +157,12 @@ def is_stationary(input_series, p_val=0.05, maxlag=5):
     else:
         return False
 
+
 def plot_acf(input_series, alpha=0.05, auto_ylim=True):
-    if not isinstance(input_series, pd.Series):
+    if type(input_series) is not pd.Series:
         input_series = pd.Series(input_series)
-    plot_acf(input_series.dropna(), lags=[1,2,3,4,5,6,7,8,9,10], alpha=alpha, auto_ylims=auto_ylim)
+    plot_acf(input_series.dropna(), lags=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], alpha=alpha, auto_ylims=auto_ylim)
+
 
 def get_outliers(input_series, multiplier=3.69, verbose=True):
     """identifies outliers in a series
@@ -172,7 +174,7 @@ def get_outliers(input_series, multiplier=3.69, verbose=True):
        input_series: list/pd.Series/np.array
        multiplier: float, default=3.69, z-value for 0.001 (0.1%)
        """
-    if isinstance(input_series, pd.Series):
+    if type(input_series) is pd.Series:
         plot_title = input_series.name
     else:
         plot_title = None
@@ -185,8 +187,8 @@ def get_outliers(input_series, multiplier=3.69, verbose=True):
 
     stdev = math.sqrt(np.var(input_series, ddof=1))
     result = pd.DataFrame({'series': input_series, 'outliers': np.zeros((len(input_series)))})
-    upper_bound = input_series.mean()+(multiplier*stdev)
-    lower_bound = input_series.mean()-(multiplier*stdev)
+    upper_bound = input_series.mean() + (multiplier * stdev)
+    lower_bound = input_series.mean() - (multiplier * stdev)
     result['outliers'].where(result['series'].between(lower_bound, upper_bound, inclusive='neither'), 1, inplace=True)
     if verbose:
         plt.figure(figsize=(16, 6))
@@ -198,17 +200,16 @@ def get_outliers(input_series, multiplier=3.69, verbose=True):
     return result
 
 
-
 def closest_number(num, lst):
     """returns the element from lst closest (in absolute value) to num"""
     try:
-        if isinstance(lst[0], (tuple, list)):
+        if type(lst[0]) in (tuple, list):
             lst = flatten(lst, 1)
     except IndexError:
         return None
     curr = lst[0]
     for elem in lst:
-        if abs(num-elem) < abs(num-curr):
+        if abs(num - elem) < abs(num - curr):
             curr = elem
     return curr
 
@@ -220,4 +221,3 @@ def profiler(func, **kwargs):
     stats.sort_stats(pstats.SortKey.TIME)
     stats.print_stats()
     return result
-

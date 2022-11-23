@@ -22,7 +22,7 @@ class Portfolio:
     portfolio_list = []
 
     def __init__(self, genome, cash):
-        if isinstance(cash, (int, float)):
+        if type(cash) in (int, np.integer, float, np.float16, np.float32, np.float64):
             __class__.portfolio_list.append(self)
             self.exchange = "NASDAQ"
             self.genome = genome
@@ -30,7 +30,6 @@ class Portfolio:
             self.cash_current = cash
             self.cash_spent = 0
             self.number_of_stocks = int
-            self.sectors = list
             self.currencies = list
             self.log = pd.DataFrame({'date_': [np.nan] * stock_class.PLACEHOLDER,
                                      'stock_name': [np.nan] * stock_class.PLACEHOLDER,
@@ -43,10 +42,7 @@ class Portfolio:
                                          'price': [np.nan] * stock_class.PLACEHOLDER,
                                          'value': [np.nan] * stock_class.PLACEHOLDER,
                                          'sector': [np.nan] * stock_class.PLACEHOLDER})
-            self.total_portfolio_value = self.cash_init
-            self.proportion_invested = 0
-            self.entropy_stock = 0
-            self.entropy_sector = 0
+            
 
     def __eq__(self, other):
         if self.genome == other.genome and self.cash_init == other.cash_init and self.exchange == other.exchange:
@@ -54,8 +50,36 @@ class Portfolio:
         else:
             return False
 
+    @property
+    def total_portfolio_value(self):
+        if self.balance.last_valid_index() is not None:
+            return self.cash_current + self.balance['value'].sum()
+        else:
+            return self.cash_current
+
+    @property
+    def entropy_stock(self):
+        total_value = self.balance['value'].sum()
+        weights = self.balance['value'] / total_value
+        return -1 * np.sum(weights * np.log(weights))
+
+    @property
+    def entropy_sector(self):
+        sector_values = list(self.balance.groupby(by="sector")['value'].sum())
+        total_value = self.balance['value'].sum()
+        weights = sector_values / total_value
+        return -1 * np.sum(weights * np.log(weights))
+
+    @property
+    def proportion_invested(self):
+        return self.cash_spent / self.cash_init
+
+    @property
+    def sectors(self):
+        return list(self.balance['sector'].unique())
+
     def got_enough_cash(self, value):
-        if isinstance(value, (float, int)):
+        if type(value) in (int, np.integer, float, np.float16, np.float32, np.float64):
             if value >= 0:
                 if value <= self.cash_current:
                     return True
@@ -69,7 +93,7 @@ class Portfolio:
             raise TypeError('value not in (int, float)')
 
     def got_enough_amount(self, stock, amount):
-        if isinstance(amount, (float, int)):
+        if type(amount) in (int, np.integer, float, np.float16, np.float32, np.float64):
             if amount <= 0:
                 if abs(amount) <= any(self.balance.loc[self.balance['stock_name'] == stock.name, 'amount']):
                     return True
@@ -82,7 +106,7 @@ class Portfolio:
                 # print(f'Positive amount: {amount}')
                 # print('here1')
                 return False
-        elif isinstance(amount, pd.Series):
+        elif type(amount) is pd.Series:
             if any(amount <= 0):
                 if any(abs(amount)) <= any(self.balance.loc[self.balance['stock_name'] == stock.name, 'amount']):
                     return True
@@ -105,49 +129,34 @@ class Portfolio:
             return self.balance.loc[self.balance['stock_name'] == stock.name, 'amount']
 
     def deduct_cash(self, amount):
-        if isinstance(amount, (float, int)):
+        if type(amount) in (int, np.integer, float, np.float16, np.float32, np.float64):
             if amount >= 0:
                 self.cash_current -= amount
+                return 0
+        else:
+            amount = float(amount)
+            self.deduct_cash(amount)
 
     def add_cash(self, amount):
-        if isinstance(amount, (float, int)):
+        if type(amount) in (int, np.integer, float, np.float16, np.float32, np.float64):
             if amount >= 0:
                 self.cash_current += amount
+                return 0
+        else:
+            amount = float(amount)
+            self.add_cash(amount)
 
     def update_cash_spent(self, value):
         """accepts negative value as well meaning that we get back cash by selling a stock"""
-        if isinstance(value, (float, int)):
+        if type(value) in (int, np.integer, float, np.float16, np.float32, np.float64):
             self.cash_spent += value
 
-    def update_proportion_invested(self):
-        self.proportion_invested = self.cash_spent / self.cash_init
-
-    def update_total_portfolio_value_old(self, as_of):
-        value_per_stock = []
-        if self.balance.last_valid_index() or self.balance.last_valid_index() == 0:
-            for row in range(len(self.balance.index)):
-                ticker = self.balance.iloc[row, self.balance.columns.get_loc('stock_name')]
-                # check if ticker is np.nan which is a np.float object
-                if not isinstance(ticker, np.float):
-                    amount = self.balance.iloc[row, self.balance.columns.get_loc('amount')]
-                    current_value = [stock.get_price(as_of) for stock in Stock.stock_list if stock.name == ticker]
-                    value_per_stock.append(current_value[0] * amount)
-                    self.total_portfolio_value = sum(value_per_stock)
-        else:
-            self.total_portfolio_value = self.cash_init
-
-    def update_total_portfolio_value(self):
-        if self.balance.last_valid_index():
-            self.total_portfolio_value = self.balance['value'].sum()
-        else:
-            self.total_portfolio_value = self.cash_init
-
-    def update_balance(self, stock, amount, price, value, sector):
+    def update_balance_transaction(self, stock, amount, price, value, sector):
         non_zero = False
-        if isinstance(np.round(abs(amount), 2), (int, float)):
+        if type(np.round(abs(amount), 2)) in (int, np.integer, float, np.float16, np.float32, np.float64):
             if not np.round(abs(amount), 2) == 0:
                 non_zero = True
-        elif isinstance(np.round(abs(amount), 2), pd.Series):
+        elif type(np.round(abs(amount), 2)) is pd.Series:
             if not any(np.round(abs(amount), 2) == 0):
                 non_zero = True
         else:
@@ -163,7 +172,7 @@ class Portfolio:
             else:
                 # if stock is not in the list yet put it in the last row
                 last_idx = self.balance.loc[:, 'stock_name'].last_valid_index()
-                if isinstance(last_idx, (int, float)):
+                if type(last_idx) in (int, np.integer, float, np.float16, np.float32, np.float64):
                     self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('stock_name')] = stock.name
                     self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('amount')] = amount
                     self.balance.iloc[last_idx + 1, self.balance.columns.get_loc('price')] = price
@@ -180,10 +189,10 @@ class Portfolio:
 
     def update_log(self, as_of, stock, direction, amount, price, value):
         non_zero = False
-        if isinstance(np.round(abs(amount), 2), (int, float)):
+        if type(np.round(abs(amount), 2)) in (int, np.integer, float, np.float16, np.float32, np.float64):
             if not np.round(abs(amount), 2) == 0:
                 non_zero = True
-        elif isinstance(np.round(abs(amount), 2), pd.Series):
+        elif type(np.round(abs(amount), 2)) is pd.Series:
             if not any(np.round(abs(amount), 2) == 0):
                 non_zero = True
         else:
@@ -191,7 +200,7 @@ class Portfolio:
 
         if non_zero:
             idx = self.log['stock_name'].last_valid_index()
-            if isinstance(idx, (int, float)):
+            if type(idx) in (int, np.integer, float, np.float16, np.float32, np.float64):
                 try:
                     self.log.iloc[idx + 1, self.log.columns.get_loc('date_')] = as_of
                     self.log.iloc[idx + 1, self.log.columns.get_loc('stock_name')] = stock.name
@@ -212,10 +221,10 @@ class Portfolio:
             else:
                 raise NotImplementedError
 
-    def update_balance_price(self, as_of):
+    def update_balance_eod(self, as_of):
         if self.balance.last_valid_index():
             for stock_name in self.balance['stock_name']:
-                if isinstance(stock_name, str):
+                if type(stock_name) is str:
                     stock = Stock.get(stock_name)
                     price = stock.get_price(as_of)
                     # update price
@@ -227,13 +236,10 @@ class Portfolio:
     def update_number_of_stocks(self):
         self.number_of_stocks = len(self.balance['stock_name'].unique())
 
-    def update_sectors(self):
-        self.sectors = list(self.balance['sector'].unique())
-
     def buy(self, stock, amount, as_of):
-        # if not isinstance(stock, Stock):
+        # if not type(stock) is Stock:
         #     raise TypeError(f'Not Stock instance! type given: {type(stock)}')
-        if not isinstance(as_of, datetime.date):
+        if type(as_of) is not datetime.date:
             raise TypeError(f'as_of should be datetime.date and not {type(as_of)}')
 
         if amount >= 0:
@@ -243,34 +249,52 @@ class Portfolio:
             if self.got_enough_cash(value):
                 self.deduct_cash(value)
                 self.update_cash_spent(value)
-                self.update_proportion_invested()
-                self.update_balance(stock, amount, price, value, stock.sector)
+                self.update_balance_transaction(stock, amount, price, value, stock.sector)
                 self.update_log(as_of=as_of, stock=stock, direction='buy', amount=amount, price=price, value=value)
 
         else:
             raise ValueError('buy requires a positive amount')
 
     def sell(self, stock, amount, as_of):
-        if not isinstance(stock, Stock):
+        if type(stock) is not Stock:
             raise TypeError(f'Not Stock instance! type given: {type(stock)}')
-        if isinstance(amount, pd.Series):
-            if any(amount <= 0):
-                price = stock.get_price(as_of)
-                value = price * amount
-        elif isinstance(amount, (int, float)):
-            if amount <= 0:
-                price = stock.get_price(as_of)
-                value = price * amount
-        else:
-            raise ValueError('amount not int/float/pd.Series')
 
-        # amount is negative, value us negative, price is positive
+        if type(amount) is pd.Series:
+            if any(amount <= 0):
+                sell_price = stock.get_price(as_of)
+                sell_value = sell_price * amount
+                # if the value is too small then just exit
+                try:
+                    if round(sell_value, 3) == 0:
+                        return 0
+                except ValueError:
+                    if any(round(sell_value, 3) == 0):
+                        return 0
+            else:
+                return 0
+        elif type(amount) in (int, np.integer, float, np.float16, np.float32, np.float64):
+            if amount <= 0:
+                sell_price = stock.get_price(as_of)
+                sell_value = sell_price * amount
+                # if the value is too small then just exit
+                try:
+                    if round(sell_value, 3) == 0:
+                        return 0
+                except ValueError:
+                    if any(round(sell_value, 3) == 0):
+                        return 0
+
+            else:
+                return 0
+        else:
+            raise TypeError("amount not numeric")
+
+        # amount is negative, value is negative, price is positive
         if self.got_enough_amount(stock, amount):
-            self.add_cash(abs(value))
-            self.update_cash_spent(value)
-            self.update_proportion_invested()
-            self.update_balance(stock, amount, price, value, stock.sector)
-            self.update_log(as_of=as_of, stock=stock, direction='sell', amount=amount, price=price, value=value)
+            self.add_cash(abs(sell_value))
+            self.update_cash_spent(sell_value)
+            self.update_balance_transaction(stock, amount, sell_price, sell_value, stock.sector)
+            self.update_log(as_of=as_of, stock=stock, direction='sell', amount=amount, price=sell_price, value=sell_value)
         else:
             # print('Do not have enough amount to sell')
             pass
@@ -313,13 +337,3 @@ class Portfolio:
                 self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
                                                        self.data['variance_global'], inplace=True)
 
-    def calc_entropy_stock(self):
-        total_value = self.balance['value'].sum()
-        weights = self.balance['value'] / total_value
-        self.entropy_stock = -1 * np.sum(weights * np.log(weights))
-
-    def calc_entropy_sector(self):
-        sector_values = list(self.balance.groupby(by="sector")['value'].sum())
-        total_value = self.balance['value'].sum()
-        weights = sector_values / total_value
-        self.entropy_sector = -1 * np.sum(weights * np.log(weights))

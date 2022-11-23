@@ -14,6 +14,7 @@ import configparser
 import random
 
 
+
 def shape_config_file(config_file, X_cols, portfolio_attributes):
     """rewrites the config file of the NEAT algorithm to be consistent with the current number of inputs
     Should only be used inside run_neat
@@ -31,6 +32,8 @@ def run_neat(config_file, total_df, restore_checkpoint_name=None, generation_int
              max_gen=300, X_cols=['forecast', 'sector_encoded', 'variance_100', 'variance_global'],
              portfolio_attributes=["proportion_invested"],
              cash=500, threshold=0.05, verbose=False):
+    """args:
+    portfolio_attributes: these should be functions that can be called without an argument, see total_portfolio_value"""
 
     shape_config_file(config_file, X_cols, portfolio_attributes)
 
@@ -63,14 +66,14 @@ def run_neat(config_file, total_df, restore_checkpoint_name=None, generation_int
             genome_portfolio = Portfolio(genome=genome, cash=cash)
             net = neat.nn.FeedForwardNetwork.create(genome, config)
             for current_date in training_data.index.unique():
+
                 # shuffle
                 random.shuffle(Stock.stock_list)
-
                 for stock in Stock.stock_list:
                     try:
                         df = stock.data.loc[current_date, X_cols]
                         for item in portfolio_attributes:
-                            df[item] = vars(genome_portfolio)[item]
+                            df[item] = genome_portfolio.__getattribute__(item)
                     except KeyError:
                         continue
                     output = net.activate(list(df))
@@ -93,16 +96,13 @@ def run_neat(config_file, total_df, restore_checkpoint_name=None, generation_int
                     else:
                         raise NotImplementedError
                 # End-of-day update
-                genome_portfolio.update_balance_price(as_of=current_date)
-                genome_portfolio.update_total_portfolio_value()
-                genome_portfolio.calc_entropy_stock()
-                genome_portfolio.calc_entropy_sector()
+                genome_portfolio.update_balance_eod(as_of=current_date)
 
                 # Fitness update daily so that the diversification is always held high
-                # entropy_sector is maximum 2.3 since we have fix 10 sectors
-                # entropy_stock can be large so we have to cap it not to suppress the total_value in the fitness
+                # entropy_sector() is maximum 2.3 since we have fix 10 sectors
+                # entropy_stock() can be large so we have to cap it not to suppress the total_value in the fitness
                 # 2.5 can be achieved with a uniformly weighted 13 stock portfolio, above that we don't differentiate
-                genome.fitness += max(genome_portfolio.entropy_stock, 2.5) + genome_portfolio.entropy_sector
+                genome.fitness += min(genome_portfolio.entropy_stock, 2.5) + genome_portfolio.entropy_sector
 
             # Fitness calculation: total_value + number of trades conducted + daily entropy
             # genome_portfolio.update_total_portfolio_value(as_of=current_date)
@@ -113,7 +113,9 @@ def run_neat(config_file, total_df, restore_checkpoint_name=None, generation_int
             if verbose:
                 print(current_date)
                 print('genome fitness', genome.fitness)
+                print('cash_current', genome_portfolio.cash_current)
                 print('log', genome_portfolio.log.head(10))
+                print('balance', genome_portfolio.balance)
 
 
     # Load configuration.
