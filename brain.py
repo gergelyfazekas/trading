@@ -101,15 +101,20 @@ def run_neat(config_file, total_df, restore_checkpoint_name=None, generation_int
                 # Fitness update daily so that the diversification is always held high
                 # entropy_sector() is maximum 2.3 since we have fix 10 sectors
                 # entropy_stock() can be large so we have to cap it not to suppress the total_value in the fitness
-                # 2.5 can be achieved with a uniformly weighted 13 stock portfolio, above that we don't differentiate
-                genome.fitness += min(genome_portfolio.entropy_stock, 2.5) + genome_portfolio.entropy_sector
+                # 2.3 can be achieved with a uniformly weighted 10 stock portfolio, above that we don't differentiate
+                genome.fitness += min(genome_portfolio.entropy_stock, 2.3) + genome_portfolio.entropy_sector
+
+                # return for that day, this incentivizes the portfolio to always have a positive daily return
+                # (last tuple, 1st element of that tuple), -1 to center, *200 to scale up
+                # a 1.01 return equals a 0.01*200 = 2 fitness score (this is a good magnitude for the entropy fitnesses)
+                genome.fitness += (genome_portfolio.portfolio_return_hist[-1][1] - 1)*200
 
             # Fitness calculation: total_value + number of trades conducted + daily entropy
             # genome_portfolio.update_total_portfolio_value(as_of=current_date)
-            if genome_portfolio.log.last_valid_index():
-                genome.fitness = genome_portfolio.total_portfolio_value + genome_portfolio.log.last_valid_index()
-            else:
-                genome.fitness = genome_portfolio.total_portfolio_value
+            # if genome_portfolio.log.last_valid_index():
+            #     genome.fitness = genome_portfolio.total_portfolio_value + genome_portfolio.log.last_valid_index()
+            # else:
+            #     genome.fitness = genome_portfolio.total_portfolio_value
             if verbose:
                 print(current_date)
                 print('genome fitness', genome.fitness)

@@ -10,6 +10,7 @@ from scipy.signal import find_peaks
 import tuning
 import math
 from statsmodels.tsa.stattools import adfuller
+import statsmodels.api as sm
 
 # Constants
 START_DATE = datetime.date(1990, 1, 1)
@@ -914,7 +915,7 @@ class Stock:
             # or array.reshape(1, -1) if it contains a single sample.
 
     @classmethod
-    def fit_predict(cls, total_df, label_str, predict_col_name, skip_cols, method, init_ratio=0.99, **kwargs):
+    def fit_predict(cls, total_df, label_str, predict_col_name, skip_cols, method, train_ratio=0.5, predict="train", **kwargs):
         """do not include the label in skip_cols"""
 
         if predict_col_name not in total_df.columns:
@@ -923,9 +924,9 @@ class Stock:
         if predict_col_name not in skip_cols:
             skip_cols.append(predict_col_name)
 
-        if not 0 < init_ratio < 1:
-            raise ValueError("init_ratio should be between 0 and 1")
-        init_size = round(len(total_df.index) * init_ratio)
+        if not 0 < train_ratio < 1:
+            raise ValueError("train_ratio should be between 0 and 1")
+        init_size = round(len(total_df.index) * train_ratio)
         init_date = total_df.index[init_size]
         print('init_date', init_date)
 
@@ -961,3 +962,71 @@ class Stock:
             prediction = model.predict(new_observation_X)
             total_df.loc[forecast_date, predict_col_name] = prediction
             # print(total_df.loc[forecast_date, predict_col_name])
+
+
+
+    @staticmethod
+    def train_test_split(total_df, train_ratio=0.5, verbose=True):
+        """returns a train df and a test df based on a train_ratio split considering the time series structure"""
+        total_df.sort_index(inplace=True)
+        max_idx = round(len(total_df.index) * train_ratio)
+        last_date = total_df.index[max_idx]
+        first_test_date = total_df.index.unique()[list(total_df.index.unique()).index(last_date)+1]
+        if verbose:
+            print(f"training data: {total_df.index[0]} -- {last_date}")
+            print(f"test data: {first_test_date} -- {total_df.index[-1]}")
+
+        train = total_df.loc[:last_date, :].copy()
+        test = total_df.loc[first_test_date:, :].copy()
+        return train, test
+
+    @staticmethod
+    def fit_AR(train_df, label_str, p, const=True, group_by="sector", predict=True, verbose=True):
+        """fits an AR(p) model separately for every group created by group_by"""
+        train_df.sort_index(inplace=True)
+
+        X_cols = []
+        params = {}
+
+        for i in range(1, p+1):
+            X_cols.append("stock_return_lag"+str(i))
+        if verbose:
+            if const:
+                print(f"regressing: {label_str} ~ const + {X_cols}")
+                print(f"group by: {group_by}")
+            else:
+                print(f"regressing: {label_str} ~ {X_cols}")
+                print(f"group by: {group_by}")
+
+        ols_columns = X_cols + [label_str]
+
+        df_collector = []
+        if group_by == "sector":
+            for sector in train_df['sector_encoded'].unique():
+                df = train_df.loc[train_df['sector_encoded'] == sector, ols_columns]
+                df.dropna(axis=0, subset=ols_columns, inplace=True)
+                df_sector_all_columns = train_df.loc[train_df['sector_encoded'] == sector, :]
+                df_sector_all_columns.dropna(axis=0, subset=ols_columns, inplace=True)
+
+                Y = df.loc[:, label_str]
+                X = df.loc[:, X_cols]
+                if const:
+                    X = sm.add_constant(X)
+
+                model = sm.OLS(Y, X).fit()
+                params[sector] = model.params
+
+                if predict:
+                    # predict using training data
+                    predictions = model.predict()
+                    df_sector_all_columns[f"AR_{p}"] = predictions
+                    df_collector.append(df_sector_all_columns)
+
+        else:
+            raise ValueError("group_by can only be 'sector'")
+
+        merged = pd.DataFrame()
+        for frame in df_collector:
+            merged = pd.concat([merged, frame], axis=0)
+        merged.sort_index(inplace=True)
+        return merged, params

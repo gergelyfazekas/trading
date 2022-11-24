@@ -42,7 +42,8 @@ class Portfolio:
                                          'price': [np.nan] * stock_class.PLACEHOLDER,
                                          'value': [np.nan] * stock_class.PLACEHOLDER,
                                          'sector': [np.nan] * stock_class.PLACEHOLDER})
-            
+            self.total_portfolio_value_hist = []
+            self.portfolio_return_hist = []
 
     def __eq__(self, other):
         if self.genome == other.genome and self.cash_init == other.cash_init and self.exchange == other.exchange:
@@ -232,6 +233,8 @@ class Portfolio:
                     # update value = price * amount
                     self.balance.loc[self.balance['stock_name'] == stock_name, "value"] = \
                         price * self.balance.loc[self.balance['stock_name'] == stock_name, "amount"]
+        self.update_total_portfolio_value_hist(as_of)
+        self.update_portfolio_return_hist(as_of)
 
     def update_number_of_stocks(self):
         self.number_of_stocks = len(self.balance['stock_name'].unique())
@@ -294,7 +297,8 @@ class Portfolio:
             self.add_cash(abs(sell_value))
             self.update_cash_spent(sell_value)
             self.update_balance_transaction(stock, amount, sell_price, sell_value, stock.sector)
-            self.update_log(as_of=as_of, stock=stock, direction='sell', amount=amount, price=sell_price, value=sell_value)
+            self.update_log(as_of=as_of, stock=stock, direction='sell', amount=amount, price=sell_price,
+                            value=sell_value)
         else:
             # print('Do not have enough amount to sell')
             pass
@@ -317,6 +321,8 @@ class Portfolio:
         # check if variance_global exists
         if 'variance_global' in self.data.columns:
             user_input = str(input('variance_global already exists, want to recalculate: y/n'))
+        else:
+            user_input = "Y"
 
         # if not in it or user wants to recalculate
         if 'variance_global' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
@@ -337,3 +343,30 @@ class Portfolio:
                 self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
                                                        self.data['variance_global'], inplace=True)
 
+    def update_total_portfolio_value_hist(self, current_date):
+        """updates the list of historical portfolio values, needs to be updated every EoD
+        update_balance_eod triggers / calls this function
+        """
+        self.total_portfolio_value_hist.append((current_date, self.total_portfolio_value))
+
+    def update_portfolio_return_hist(self, current_date):
+        """updates the list of historical portfolio returns, needs to be updated every EoD
+        update_balance_eod triggers / calls this function
+
+        the return is calc'd from the history of total_portfolio_values
+        total_portfolio_value is calc'd from cash_current + balance
+        """
+        if self.total_portfolio_value_hist:
+
+            portfolio_value_today, today_idx = \
+                [(item[1], self.total_portfolio_value_hist.index(item)) for item in self.total_portfolio_value_hist \
+                 if item[0] == current_date][0]
+
+            if len(self.total_portfolio_value_hist) >= 2:
+                previous_idx = today_idx - 1
+                portfolio_value_yesterday = self.total_portfolio_value_hist[previous_idx][1]
+                self.portfolio_return_hist.append((current_date, portfolio_value_today / portfolio_value_yesterday))
+            else:
+                self.portfolio_return_hist.append((current_date, 1))
+        else:
+            self.portfolio_return_hist.append((current_date, 1))
