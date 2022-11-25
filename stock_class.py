@@ -17,7 +17,7 @@ START_DATE = datetime.date(1990, 1, 1)
 END_DATE = datetime.date(2020, 1, 1)
 MAX_WORKERS = 20
 LOOK_AHEAD_RANGE = 31
-PLACEHOLDER = 1000
+PLACEHOLDER = 10000
 
 
 class Stock:
@@ -621,6 +621,8 @@ class Stock:
             return self.data.loc[as_of, 'close']
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
+        except KeyError:
+            raise KeyError(f"{self.name} has no available price as of {as_of}")
 
     def get_price_range(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today()):
         try:
@@ -986,9 +988,9 @@ class Stock:
         train_df.sort_index(inplace=True)
 
         X_cols = []
-        params = {}
+        models = {}
 
-        for i in range(1, p+1):
+        for i in range(p):
             X_cols.append("stock_return_lag"+str(i))
         if verbose:
             if const:
@@ -1014,7 +1016,7 @@ class Stock:
                     X = sm.add_constant(X)
 
                 model = sm.OLS(Y, X).fit()
-                params[sector] = model.params
+                models[sector] = model
 
                 if predict:
                     # predict using training data
@@ -1029,4 +1031,47 @@ class Stock:
         for frame in df_collector:
             merged = pd.concat([merged, frame], axis=0)
         merged.sort_index(inplace=True)
-        return merged, params
+        return merged, models
+
+    @staticmethod
+    def predict_AR(test_df, models, group_by="sector", verbose=True):
+        # all models have the same lag lenght p, so we only need one
+        selected_key = list(models.keys())[0]
+        params = list(models[selected_key].params.index)
+        if "const" in params:
+            const = True
+            params.pop(params.index("const"))
+        else:
+            const = False
+
+        X_cols = params.copy()
+        # last letter of the largest lag + 1 (since that starts from 0)
+        try:
+            p = int(X_cols[-1][-1]) + 1
+        except ValueError:
+            p = str(input("What is the lag order of this model? p = ..."))
+
+        if verbose:
+            print(f"Lag length: {p}")
+            print(f"Covariates: {'const' if const else ''} + {X_cols}")
+        df_collector = []
+        if group_by == "sector":
+            for sector, model in models.items():
+                test_df_by_sector = test_df.loc[test_df['sector_encoded'] == sector, :].copy()
+                X = test_df.loc[test_df['sector_encoded'] == sector, X_cols].copy()
+                if const:
+                    X = sm.add_constant(X)
+                prediction = model.predict(exog=X)
+                test_df_by_sector[f'AR_{p}'] = prediction
+                df_collector.append(test_df_by_sector)
+
+        merged = pd.DataFrame()
+        for frame in df_collector:
+            merged = pd.concat([merged, frame], axis=0)
+        merged.sort_index(inplace=True)
+        return merged
+
+
+
+
+

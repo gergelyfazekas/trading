@@ -69,13 +69,13 @@ def lasso(training_data, label_str, alpha, **kwargs):
     return model
 
 
-def hist_gradient_booster(training_data, label_str, **kwargs):
+def hist_gradient_booster(training_data, label_str, X_cols, **kwargs):
     """gradient boosting using native NaN handling
     categorical features have to be set in pd.DataFrame as categorical: total_df['sector_encoded'].astype("category")
     **kwargs are passed to HistGradBoost:
         except categorical_features which is created inside this function and should not be passed among kwargs!!
     """
-    X = training_data.loc[:, training_data.columns != label_str].copy()
+    X = training_data.loc[:, X_cols].copy()
     y = pd.Series(training_data.loc[:, label_str].copy())
 
     category_mask = list(X.dtypes == "category")
