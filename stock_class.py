@@ -327,9 +327,8 @@ class Stock:
                                                             1, 0)
                         stock.data['true_cat_3'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
 
-    @classmethod
-    def get_stocks_per_date(cls, verbose=False):
-        total_df = cls.aggregate_data()
+    @staticmethod
+    def get_stocks_per_date(total_df, verbose=False):
         if verbose:
             print('total_df', total_df)
         df1 = pd.DataFrame(total_df.groupby('date_')['ticker'].apply(lambda x: len(x)))
@@ -622,7 +621,9 @@ class Stock:
         except TypeError:
             print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
         except KeyError:
-            raise KeyError(f"{self.name} has no available price as of {as_of}")
+            if self.last_date < as_of:
+                return self.data.loc[self.last_date, 'close']
+
 
     def get_price_range(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today()):
         try:
