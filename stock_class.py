@@ -277,7 +277,7 @@ class Stock:
             stock.set_index()
 
     @classmethod
-    def ranking_to_dummy(cls, threshold1=10, threshold2=20, threshold3=30, true_ranking=False):
+    def ranking_to_dummy(cls, total_df, threshold1=10, threshold2=20, threshold3=30, true_ranking=False):
         """turns ranking into dummy variables for all stocks in stock_list based on <= thresholds
            the new columns in stock.data are named as cat_1, cat_2, cat_3
         args:
@@ -292,7 +292,7 @@ class Stock:
         e.g. 5, 10, 20 means that we differentiate top_5, top_5_to_10, top_10_to_20 and all other
         """
         if threshold3:
-            num_stocks_per_day = cls.get_stocks_per_date()['len_ticker'].min()
+            num_stocks_per_day = cls.get_stocks_per_date(total_df)['len_ticker'].min()
             if num_stocks_per_day <= threshold3:
                 raise ValueError(f'thresholds do not differentiate {num_stocks_per_day} stocks')
 
@@ -990,9 +990,13 @@ class Stock:
 
         X_cols = []
         models = {}
+        # label_str is either label_stock_return or label_log_return -- get rid of label_ and put _lag{i} to the end
+        lag_name = label_str.split("_")
+        lag_name.pop(0)
+        lag_name_str = "_".join(lag_name)
 
         for i in range(p):
-            X_cols.append("stock_return_lag"+str(i))
+            X_cols.append(lag_name_str + "_lag" + str(i))
         if verbose:
             if const:
                 print(f"regressing: {label_str} ~ const + {X_cols}")
@@ -1024,6 +1028,8 @@ class Stock:
                     predictions = model.predict()
                     df_sector_all_columns[f"AR_{p}"] = predictions
                     df_collector.append(df_sector_all_columns)
+            if verbose:
+                print(f"created column: AR_{p}")
 
         else:
             raise ValueError("group_by can only be 'sector'")
