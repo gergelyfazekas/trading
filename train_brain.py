@@ -10,12 +10,13 @@ import matplotlib.pyplot as plt
 import forecast
 import brain
 import random
+import os
 
 
-def main(num_workers=1, max_gen=1, restore_checkpoint_name=None, mini_batch_size=50, last_days_only=2):
+def main(num_workers=8, max_gen=2, restore_checkpoint=False, mini_batch_size=2, last_days_only=None):
     """train the NEAT algorithm and save checkpoints
     max_gen: number of generations to train
-    restore_checkpoint_name: to start training from a saved checkpoint
+    restore_checkpoint_name: bool, if True searches for the latest saved checkpoint to continue training
     mini_batch_size: int or None, how many days to select randomly for training one generation, if None use whole dataset
     last_days_only: int or None, if int then brain_df.loc[brain_df.index.unique()[-last_days_only:], :]
         is used to reduce the size of the df for testing, if None then the whole brain_df is used which takes a lot longer
@@ -23,6 +24,18 @@ def main(num_workers=1, max_gen=1, restore_checkpoint_name=None, mini_batch_size
     # open data for NEAT
     with open('brain_df.pickle', 'rb') as f:
         brain_df = pickle.load(f)
+
+    # get last checkpoint
+    if restore_checkpoint:
+        files = os.listdir()
+        checkpoints = [filename for filename in files if filename.startswith("neat-checkpoint")]
+        spl = [item.split("-") for item in checkpoints]
+        last_checkpoint = "neat-checkpoint-" + str(max([int(item[2]) for item in spl]))
+        print(f"Training from: {last_checkpoint}")
+    else:
+        last_checkpoint = None
+
+
 
     if mini_batch_size:
         if last_days_only:
@@ -45,7 +58,7 @@ def main(num_workers=1, max_gen=1, restore_checkpoint_name=None, mini_batch_size
                                               num_workers=num_workers,
                                               max_gen=max_gen,
                                               cash=1000,
-                                              restore_checkpoint_name=restore_checkpoint_name,
+                                              restore_checkpoint_name=last_checkpoint,
                                               generation_interval=1,
                                               total_df=brain_df,
                                               X_cols=['cat_1', 'cat_2', 'cat_3', 'Basic Materials',

@@ -214,33 +214,18 @@ class Stock:
             stock.set_dates()
             stock.set_sector()
 
-    @classmethod
-    def generate_ranking(cls, total_df, true_ranking=False, label_name='label_minmax_10'):
+    @staticmethod
+    def generate_ranking(total_df, true_ranking=False, label_name='label_minmax_10'):
         """generates ranking for all stocks in stock_list for every day
         args:
         true_ranking: if True, calculates the ranking based on the true label and not the forecast
         label_name: one of 'label_minmax', label_max', 'label_avg', only used if true_ranking is True
         """
 
-        # first_date = datetime.date.today()
-        # last_date = datetime.date(2000, 1, 1)
-        # for stock in cls.stock_list:
-        #     stock.set_dates()
-        #     if stock.first_date < first_date:
-        #         first_date = stock.first_date
-        #     if stock.last_date > last_date:
-        #         last_date = stock.last_date
-        # total_df = cls.aggregate_data()
-
         if not true_ranking:
             if 'ranking' not in total_df.columns:
                 total_df['ranking'] = np.nan
-            else:
-                user_input = str(input('ranking already exists, want to overwrite: y/n'))
-                if user_input.upper() in ['YES', 'Y']:
-                    pass
-                else:
-                    raise InterruptedError
+
         if true_ranking:
             if 'true_ranking' not in total_df.columns:
                 total_df['true_ranking'] = np.nan
@@ -271,13 +256,8 @@ class Stock:
                     except AttributeError:
                         total_df.loc[current_date, 'true_ranking'] = 1
 
-        for stock in cls.stock_list:
-            stock.set_data(total_df.loc[total_df['ticker'] == stock.name])
-            stock.lowercase()
-            stock.set_index()
-
-    @classmethod
-    def ranking_to_dummy(cls, total_df, threshold1=10, threshold2=20, threshold3=30, true_ranking=False):
+    @staticmethod
+    def ranking_to_dummy(total_df, threshold1=10, threshold2=20, threshold3=30, true_ranking=False):
         """turns ranking into dummy variables for all stocks in stock_list based on <= thresholds
            the new columns in stock.data are named as cat_1, cat_2, cat_3
         args:
@@ -292,40 +272,39 @@ class Stock:
         e.g. 5, 10, 20 means that we differentiate top_5, top_5_to_10, top_10_to_20 and all other
         """
         if threshold3:
-            num_stocks_per_day = cls.get_stocks_per_date(total_df)['len_ticker'].min()
+            num_stocks_per_day = Stock.get_stocks_per_date(total_df)['len_ticker'].min()
             if num_stocks_per_day <= threshold3:
                 raise ValueError(f'thresholds do not differentiate {num_stocks_per_day} stocks')
 
-        for stock in cls.stock_list:
-            if 'ranking' not in stock.data.columns:
-                raise KeyError('ranking not available, use generate_ranking first')
+        if 'ranking' not in total_df.columns:
+            raise KeyError('ranking not available, use generate_ranking first')
+        else:
+            # df.between is inclusive by default on both sides, e.g. 0 <= total_df['ranking'] <= threshold1
+            # df.mask changes the values of the column where the condition is True
+            if threshold1:
+                total_df['cat_1'] = np.where(total_df['ranking'].between(0, threshold1), 1, 0)
+                total_df['cat_1'].mask(total_df['ranking'].isna(), np.nan, inplace=True)
+            if threshold2:
+                total_df['cat_2'] = np.where(total_df['ranking'].between(threshold1, threshold2), 1, 0)
+                total_df['cat_2'].mask(total_df['ranking'].isna(), np.nan, inplace=True)
+            if threshold3:
+                total_df['cat_3'] = np.where(total_df['ranking'].between(threshold2, threshold3), 1, 0)
+                total_df['cat_3'].mask(total_df['ranking'].isna(), np.nan, inplace=True)
+        if true_ranking:
+            if 'true_ranking' not in total_df.columns:
+                raise KeyError('true_ranking not available, first use generate_ranking(true_ranking=True)')
             else:
-                # df.between is inclusive by default on both sides, e.g. 0 <= stock.data['ranking'] <= threshold1
-                # df.mask changes the values of the column where the condition is True
                 if threshold1:
-                    stock.data['cat_1'] = np.where(stock.data['ranking'].between(0, threshold1), 1, 0)
-                    stock.data['cat_1'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
+                    total_df['true_cat_1'] = np.where(total_df['true_ranking'].between(0, threshold1), 1, 0)
+                    total_df['true_cat_1'].mask(total_df['true_ranking'].isna(), np.nan, inplace=True)
                 if threshold2:
-                    stock.data['cat_2'] = np.where(stock.data['ranking'].between(threshold1, threshold2), 1, 0)
-                    stock.data['cat_2'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
+                    total_df['true_cat_2'] = np.where(total_df['true_ranking'].between(threshold1, threshold2),
+                                                        1, 0)
+                    total_df['true_cat_2'].mask(total_df['true_ranking'].isna(), np.nan, inplace=True)
                 if threshold3:
-                    stock.data['cat_3'] = np.where(stock.data['ranking'].between(threshold2, threshold3), 1, 0)
-                    stock.data['cat_3'].mask(stock.data['ranking'].isna(), np.nan, inplace=True)
-            if true_ranking:
-                if 'true_ranking' not in stock.data.columns:
-                    raise KeyError('true_ranking not available, first use generate_ranking(true_ranking=True)')
-                else:
-                    if threshold1:
-                        stock.data['true_cat_1'] = np.where(stock.data['true_ranking'].between(0, threshold1), 1, 0)
-                        stock.data['true_cat_1'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
-                    if threshold2:
-                        stock.data['true_cat_2'] = np.where(stock.data['true_ranking'].between(threshold1, threshold2),
-                                                            1, 0)
-                        stock.data['true_cat_2'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
-                    if threshold3:
-                        stock.data['true_cat_3'] = np.where(stock.data['true_ranking'].between(threshold2, threshold3),
-                                                            1, 0)
-                        stock.data['true_cat_3'].mask(stock.data['true_ranking'].isna(), np.nan, inplace=True)
+                    total_df['true_cat_3'] = np.where(total_df['true_ranking'].between(threshold2, threshold3),
+                                                        1, 0)
+                    total_df['true_cat_3'].mask(total_df['true_ranking'].isna(), np.nan, inplace=True)
 
     @staticmethod
     def get_stocks_per_date(total_df, verbose=False):

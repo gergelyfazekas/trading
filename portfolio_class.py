@@ -62,9 +62,13 @@ class Portfolio:
     def entropy_stock(self):
         cutoff = 0.000001
         total_value = self.balance['value'].sum()
-        weights = np.array(self.balance['value'] / total_value)
-        weights[weights < cutoff] = cutoff
-        return -1 * np.sum(weights * np.log(weights))
+        # if all self.balance['value'] is np.nan --> weights would be np.nan --> fitness would be np.nan
+        if not self.balance['value'].first_valid_index():
+            return 0
+        else:
+            weights = np.array(self.balance['value'] / total_value)
+            weights[weights < cutoff] = cutoff
+            return -1 * np.sum(weights * np.log(weights))
 
     @property
     def entropy_sector(self):
