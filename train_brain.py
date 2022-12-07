@@ -13,7 +13,7 @@ import random
 import os
 
 
-def main(num_workers=8, max_gen=2, restore_checkpoint=False, mini_batch_size=2, last_days_only=None):
+def main(num_workers=8, max_gen=2, restore_checkpoint=False, mini_batch_size=10, last_days_only=None):
     """train the NEAT algorithm and save checkpoints
     max_gen: number of generations to train
     restore_checkpoint_name: bool, if True searches for the latest saved checkpoint to continue training
@@ -23,53 +23,75 @@ def main(num_workers=8, max_gen=2, restore_checkpoint=False, mini_batch_size=2, 
     """
     # open data for NEAT
     with open('brain_df.pickle', 'rb') as f:
-        brain_df = pickle.load(f)
-
-    # get last checkpoint
-    if restore_checkpoint:
-        files = os.listdir()
-        checkpoints = [filename for filename in files if filename.startswith("neat-checkpoint")]
-        spl = [item.split("-") for item in checkpoints]
-        last_checkpoint = "neat-checkpoint-" + str(max([int(item[2]) for item in spl]))
-        print(f"Training from: {last_checkpoint}")
-    else:
-        last_checkpoint = None
-
-
+        total_df = pickle.load(f)
 
     if mini_batch_size:
         if last_days_only:
             raise ValueError("One of 'mini_batch_size' or 'last_days_only' should be None")
 
     if last_days_only:
-        last_days = brain_df.index.unique()[-last_days_only:]
-        brain_df = brain_df.loc[last_days, :]
+        last_days = total_df.index.unique()[-last_days_only:]
+        brain_df = total_df.loc[last_days, :]
 
     if mini_batch_size:
-        unique_dates = list(brain_df.index.unique())
-        random_start_index = random.randint(0, len(unique_dates) - mini_batch_size)
-        end_index = random_start_index + mini_batch_size
-        selected_dates = unique_dates[random_start_index:end_index]
-        brain_df = brain_df.loc[selected_dates, :].copy()
+        unique_dates = list(total_df.index.unique())
 
-    # fit NEAT
-    brain_df.sort_index(inplace=True)
-    winner, winner_portfolio = brain.run_neat(config_file=r'neat_config.txt',
-                                              num_workers=num_workers,
-                                              max_gen=max_gen,
-                                              cash=1000,
-                                              restore_checkpoint_name=last_checkpoint,
-                                              generation_interval=1,
-                                              total_df=brain_df,
-                                              X_cols=['cat_1', 'cat_2', 'cat_3', 'Basic Materials',
-                                                      'Communication Services',
-                                                      'Consumer Cyclical', 'Consumer Defensive', 'Energy',
-                                                      'Financial Services', 'Healthcare', 'Industrials', 'Real Estate',
-                                                      'Technology', 'Utilities', 'variance_100', 'variance_global'],
-                                              portfolio_attributes=["proportion_invested", "entropy_stock",
-                                                                    "entropy_sector"],
-                                              verbose=False)
+    # loop generation by generation
+    count_gen = 0
+    run = True
+    while run:
+        # select random mini-batch for every single generation
+        if mini_batch_size:
+            random_start_index = random.randint(0, len(unique_dates) - mini_batch_size)
+            end_index = random_start_index + mini_batch_size
+            selected_dates = unique_dates[random_start_index:end_index]
+            brain_df = total_df.loc[selected_dates, :].copy()
+            print("-------------------------------------------")
+            print(f"generation {count_gen} -- Date: {unique_dates[random_start_index]}")
 
+        # get last checkpoint
+        if count_gen == 0:
+            if restore_checkpoint:
+                files = os.listdir()
+                checkpoints = [filename for filename in files if filename.startswith("neat-checkpoint")]
+                spl = [item.split("-") for item in checkpoints]
+                last_checkpoint = "neat-checkpoint-" + str(max([int(item[2]) for item in spl]))
+                print(f"Latest checkpoint: {last_checkpoint}")
+            else:
+                last_checkpoint = None
+                print("Latest checkpoint: None")
+
+        elif count_gen > 0:
+            files = os.listdir()
+            checkpoints = [filename for filename in files if filename.startswith("neat-checkpoint")]
+            spl = [item.split("-") for item in checkpoints]
+            last_checkpoint = "neat-checkpoint-" + str(max([int(item[2]) for item in spl]))
+            print(f"Latest checkpoint: {last_checkpoint}")
+
+        # fit NEAT
+        brain_df.sort_index(inplace=True)
+        winner, winner_portfolio = brain.run_neat(config_file=r'neat_config.txt',
+                                                  num_workers=num_workers,
+                                                  max_gen=1,
+                                                  cash=1000,
+                                                  restore_checkpoint_name=last_checkpoint,
+                                                  generation_interval=1,
+                                                  total_df=brain_df,
+                                                  X_cols=['cat_1', 'cat_2', 'cat_3', 'Basic Materials',
+                                                          'Communication Services',
+                                                          'Consumer Cyclical', 'Consumer Defensive', 'Energy',
+                                                          'Financial Services', 'Healthcare', 'Industrials',
+                                                          'Real Estate',
+                                                          'Technology', 'Utilities', 'variance_100', 'variance_global'],
+                                                  portfolio_attributes=["proportion_invested", "entropy_stock",
+                                                                        "entropy_sector"],
+                                                  verbose=False)
+
+        count_gen += 1
+        if count_gen < max_gen:
+            run = True
+        else:
+            run = False
     # plot winner_portfolio.balance
     # plt.pie(winner_portfolio.balance.groupby('sector')['value'].sum(),
     #         labels=winner_portfolio.balance.groupby('sector')['sector'].apply(set))

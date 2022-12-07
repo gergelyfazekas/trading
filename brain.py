@@ -27,6 +27,8 @@ class ParallelEvaluator(object):
         eval_function should take one argument, a tuple of (genome object, config object),
         and return a single float (the genome's fitness).
         """
+        self.num_workers = num_workers
+        self.maxtasksperchild = maxtasksperchild
         self.eval_function = eval_function
         self.timeout = timeout
         self.pool = Pool(processes=num_workers, maxtasksperchild=maxtasksperchild)
@@ -38,7 +40,7 @@ class ParallelEvaluator(object):
 
 
     def evaluate(self, genomes, config):
-
+        self.pool.restart()
         genomes_without_id = [genome for genome_id, genome in genomes]
         config_list = [config] * len(genomes_without_id)
         genome_config_tuples = list(zip(genomes_without_id, config_list))
@@ -86,7 +88,9 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
 
     # print(training_data)
 
-    # Stock.clear_stock_list()
+    Stock.clear_stock_list()
+    Stock.set_each(training_data)
+    random.shuffle(Stock.stock_list)
 
     def eval_genomes(genomes, config):
         """evaluates every portfolio's genome by looping through
@@ -143,16 +147,17 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
                 # End-of-day update
                 genome_portfolio.update_balance_eod(as_of=current_date)
 
-                # Fitness update daily so that the diversification is always held high
-                # entropy_sector() is maximum 2.3 since we have fix 10 sectors
-                # entropy_stock() can be large so we have to cap it not to suppress the total_value in the fitness
-                # 2.3 can be achieved with a uniformly weighted 10 stock portfolio, above that we don't differentiate
-                genome.fitness += min(genome_portfolio.entropy_stock, 2.3) + genome_portfolio.entropy_sector
-
                 # return for that day, this incentivizes the portfolio to always have a positive daily return
                 # (last tuple, 1st element of that tuple), -1 to center, *200 to scale up
                 # a 1.01 return equals a 0.01*200 = 2 fitness score (this is a good magnitude for the entropy fitnesses)
                 genome.fitness += (genome_portfolio.portfolio_return_hist[-1][1] - 1) * 200
+
+            # Fitness update daily so that the diversification is always held high
+            # entropy_sector() is maximum 2.3 since we have fix 10 sectors
+            # entropy_stock() can be large so we have to cap it not to suppress the total_value in the fitness
+            # 2.3 can be achieved with a uniformly weighted 10 stock portfolio, above that we don't differentiate
+            # a well diversified portfolio earns a 4 * (2.3 + 2.3) = 19 fitness which is comparable to 10 days of 1.01 return
+            genome.fitness += 4 * (min(genome_portfolio.entropy_stock, 2.3) + genome_portfolio.entropy_sector)
 
             # Fitness calculation: total_value + number of trades conducted + daily entropy
             # genome_portfolio.update_total_portfolio_value(as_of=current_date)
@@ -184,10 +189,6 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
                                      - all columns are covariates (no label/target is included)
             cash_current -- the dollar value of a portfolio's budget
             """
-        Stock.set_each(training_data)
-        # if type(genome_config_tuple) not in (tuple, list):
-        #     raise TypeError("eval_genomes_parallel takes a tuple of genome, config")
-        # print('type(genome_config_tuple)', type(genome_config_tuple))
 
         genome = genome_config_tuple[0]
         config = genome_config_tuple[1]
@@ -197,8 +198,6 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
         net = neat.nn.FeedForwardNetwork.create(genome, config)
 
         for current_date in training_data.index.unique():
-            # shuffle
-            random.shuffle(Stock.stock_list)
             for stock in Stock.stock_list:
                 try:
                     df = stock.data.loc[current_date, X_cols]
@@ -228,29 +227,30 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
             # End-of-day update
             genome_portfolio.update_balance_eod(as_of=current_date)
 
-            # Fitness update daily so that the diversification is always held high
-            # entropy_sector() is maximum 2.3 since we have fix 10 sectors
-            # entropy_stock() can be large so we have to cap it not to suppress the total_value in the fitness
-            # 2.3 can be achieved with a uniformly weighted 10 stock portfolio, above that we don't differentiate
-            genome.fitness += min(genome_portfolio.entropy_stock, 2.3) + genome_portfolio.entropy_sector
-
             # return for that day, this incentivizes the portfolio to always have a positive daily return
             # (last tuple, 1st element of that tuple), -1 to center, *200 to scale up
             # a 1.01 return equals a 0.01*200 = 2 fitness score (this is a good magnitude for the entropy fitnesses)
             genome.fitness += (genome_portfolio.portfolio_return_hist[-1][1] - 1) * 200
 
-            # Fitness calculation: total_value + number of trades conducted + daily entropy
-            # genome_portfolio.update_total_portfolio_value(as_of=current_date)
-            # if genome_portfolio.log.last_valid_index():
-            #     genome.fitness = genome_portfolio.total_portfolio_value + genome_portfolio.log.last_valid_index()
-            # else:
-            #     genome.fitness = genome_portfolio.total_portfolio_value
-            if verbose:
-                print(current_date)
-                print('genome fitness', genome.fitness)
-                print('cash_current', genome_portfolio.cash_current)
-                print('log', genome_portfolio.log.head(10))
-                print('balance', genome_portfolio.balance)
+            # Fitness update daily so that the diversification is always held high
+            # entropy_sector() is maximum 2.3 since we have fix 10 sectors
+            # entropy_stock() can be large so we have to cap it not to suppress the total_value in the fitness
+            # 2.3 can be achieved with a uniformly weighted 10 stock portfolio, above that we don't differentiate
+            # a well diversified portfolio earns a 4 * (2.3 + 2.3) = 19 fitness which is comparable to 10 days of 1.01 return
+        genome.fitness += 4 * (min(genome_portfolio.entropy_stock, 2.3) + genome_portfolio.entropy_sector)
+
+        # Fitness calculation: total_value + number of trades conducted + daily entropy
+        # genome_portfolio.update_total_portfolio_value(as_of=current_date)
+        # if genome_portfolio.log.last_valid_index():
+        #     genome.fitness = genome_portfolio.total_portfolio_value + genome_portfolio.log.last_valid_index()
+        # else:
+        #     genome.fitness = genome_portfolio.total_portfolio_value
+        if verbose:
+            print(current_date)
+            print('genome fitness', genome.fitness)
+            print('cash_current', genome_portfolio.cash_current)
+            print('log', genome_portfolio.log.head(10))
+            print('balance', genome_portfolio.balance)
         # end of date loop
         return genome.fitness
 
@@ -281,14 +281,16 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
     # Multiple CPU
     elif num_workers > 1:
         par_eval = ParallelEvaluator(num_workers=num_workers, eval_function=eval_genomes_parallel)
+        # winner = p.run(ParallelEvaluator(num_workers=num_workers, eval_function=eval_genomes_parallel).evaluate, max_gen)
         winner = p.run(par_eval.evaluate, max_gen)
+        par_eval.__del__()
 
         # can't get winner portfolio yet --- TO DO
         try:
             winner_portf = [portf for portf in portfolio_list_parallel if portf.genome == winner][0]
         except IndexError:
             winner_portf = None
-            print('Unable to return winner portfolio yet')
+            # print('Unable to return winner portfolio yet')
     else:
         raise ValueError("Invalid num_workers")
 
