@@ -597,11 +597,19 @@ class Stock:
     def get_price(self, as_of):
         try:
             return self.data.loc[as_of, 'close']
-        except TypeError:
-            print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
         except KeyError:
             if self.last_date < as_of:
                 return self.data.loc[self.last_date, 'close']
+            else:
+                if as_of.weekday() == 6:
+                    previous_day = as_of - datetime.timedelta(days=2)
+                else:
+                    previous_day = as_of - datetime.timedelta(days=1)
+                price = self.get_price(previous_day)
+                return price
+        except TypeError:
+            print(f'Stock.data is not set for {self.name}. First fill it from yahoo or sql.')
+            return 0
 
 
     def get_price_range(self, from_date=datetime.date(2000, 1, 1), to_date=datetime.date.today()):

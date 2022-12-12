@@ -13,6 +13,7 @@ import database
 import configparser
 import random
 import time
+import warnings
 # from neat.parallel import ParallelEvaluator
 
 
@@ -47,7 +48,7 @@ class ParallelEvaluator(object):
 
         jobs = self.pool.amap(self.eval_function, genome_config_tuples)
         fitnesses = jobs.get()
-        # print('fitnesses', '\n', fitnesses)
+        print('fitnesses', '\n', fitnesses)
         for fit, genome in zip(fitnesses, genomes_without_id):
             genome.fitness = fit
 
@@ -209,9 +210,15 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
                 decision, proportion = output_to_decision(output[0], threshold=threshold)
 
                 if decision == 'buy':
-                    # amount is the number of stocks to buy, value is the amount * price
-                    amount = (proportion * genome_portfolio.cash_current) / \
-                             stock.data.loc[current_date, "close"]
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings('error')
+                        try:
+                            # amount is the number of stocks to buy, value is the amount * price
+                            amount = (proportion * genome_portfolio.cash_current) / \
+                                     stock.data.loc[current_date, "close"]
+                        except Warning as e:
+                            amount = 0
+
                     genome_portfolio.buy(stock=stock, amount=amount, as_of=current_date)
                 elif decision == 'sell':
                     # amount is the number of stocks to sell (negative if sell), value is the amount * price
@@ -230,7 +237,13 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
             # return for that day, this incentivizes the portfolio to always have a positive daily return
             # (last tuple, 1st element of that tuple), -1 to center, *200 to scale up
             # a 1.01 return equals a 0.01*200 = 2 fitness score (this is a good magnitude for the entropy fitnesses)
-            genome.fitness += (genome_portfolio.portfolio_return_hist[-1][1] - 1) * 200
+
+            # asymmetric punishment - reward
+            # if we have a worse-than-10% loss we use double weight in reducing the fitness (400 instead of 200)
+            if (genome_portfolio.portfolio_return_hist[-1][1] - 1) < -0.1:
+                genome.fitness += (genome_portfolio.portfolio_return_hist[-1][1] - 1) * 400
+            else:
+                genome.fitness += (genome_portfolio.portfolio_return_hist[-1][1] - 1) * 200
 
             # Fitness update daily so that the diversification is always held high
             # entropy_sector() is maximum 2.3 since we have fix 10 sectors

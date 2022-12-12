@@ -13,7 +13,7 @@ import random
 import os
 
 
-def main(num_workers=8, max_gen=2, restore_checkpoint=False, mini_batch_size=10, last_days_only=None):
+def main(num_workers=8, max_gen=50, restore_checkpoint=False, mini_batch_size=50, last_days_only=None):
     """train the NEAT algorithm and save checkpoints
     max_gen: number of generations to train
     restore_checkpoint_name: bool, if True searches for the latest saved checkpoint to continue training
@@ -55,11 +55,17 @@ def main(num_workers=8, max_gen=2, restore_checkpoint=False, mini_batch_size=10,
                 files = os.listdir()
                 checkpoints = [filename for filename in files if filename.startswith("neat-checkpoint")]
                 spl = [item.split("-") for item in checkpoints]
+                # last_checkpoint
                 last_checkpoint = "neat-checkpoint-" + str(max([int(item[2]) for item in spl]))
                 print(f"Latest checkpoint: {last_checkpoint}")
+                # max_gen_temp and gen_interval_temp (for correctly picking up and saving)
+                max_gen_temp = 1
+                gen_interval_temp = 1
             else:
                 last_checkpoint = None
                 print("Latest checkpoint: None")
+                max_gen_temp = 1
+                gen_interval_temp = 1
 
         elif count_gen > 0:
             files = os.listdir()
@@ -67,15 +73,17 @@ def main(num_workers=8, max_gen=2, restore_checkpoint=False, mini_batch_size=10,
             spl = [item.split("-") for item in checkpoints]
             last_checkpoint = "neat-checkpoint-" + str(max([int(item[2]) for item in spl]))
             print(f"Latest checkpoint: {last_checkpoint}")
+            max_gen_temp = 3
+            gen_interval_temp = 2
 
         # fit NEAT
         brain_df.sort_index(inplace=True)
         winner, winner_portfolio = brain.run_neat(config_file=r'neat_config.txt',
                                                   num_workers=num_workers,
-                                                  max_gen=1,
+                                                  max_gen=max_gen_temp,
                                                   cash=1000,
                                                   restore_checkpoint_name=last_checkpoint,
-                                                  generation_interval=1,
+                                                  generation_interval=gen_interval_temp,
                                                   total_df=brain_df,
                                                   X_cols=['cat_1', 'cat_2', 'cat_3', 'Basic Materials',
                                                           'Communication Services',

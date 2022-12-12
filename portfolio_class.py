@@ -160,19 +160,19 @@ class Portfolio:
 
     def update_cash_spent(self, value):
         """accepts negative value as well meaning that we get back cash by selling a stock"""
-        if type(value) in (int, np.integer, float, np.float16, np.float32, np.float64):
-            self.cash_spent += value
+        try:
+            self.cash_spent += float(value)
+        except TypeError:
+            print("cash_spent not updated with value, ", value)
 
     def update_balance_transaction(self, stock, amount, price, value, sector):
-        non_zero = False
-        if type(np.round(abs(amount), 2)) in (int, np.integer, float, np.float16, np.float32, np.float64):
-            if not np.round(abs(amount), 2) == 0:
-                non_zero = True
-        elif type(np.round(abs(amount), 2)) is pd.Series:
-            if not any(np.round(abs(amount), 2) == 0):
-                non_zero = True
-        else:
-            print('type(np.round(abs(amount),2))', type(np.round(abs(amount), 2)))
+        non_zero = True
+        try:
+            if np.round(abs(amount), 2) == 0:
+                non_zero = False
+        except ValueError:
+            if any(np.round(abs(amount), 2) == 0):
+                non_zero = False
         if non_zero:
             # if stock is in the list already
             if stock.name in self.balance['stock_name'].unique():
@@ -200,16 +200,13 @@ class Portfolio:
                     self.balance.iloc[0, self.balance.columns.get_loc('sector')] = sector
 
     def update_log(self, as_of, stock, direction, amount, price, value):
-        non_zero = False
-        if type(np.round(abs(amount), 2)) in (int, np.integer, float, np.float16, np.float32, np.float64):
-            if not np.round(abs(amount), 2) == 0:
-                non_zero = True
-        elif type(np.round(abs(amount), 2)) is pd.Series:
-            if not any(np.round(abs(amount), 2) == 0):
-                non_zero = True
-        else:
-            print('type(np.round(abs(amount),2))', type(np.round(abs(amount), 2)))
-
+        non_zero = True
+        try:
+            if np.round(abs(amount), 2) == 0:
+                non_zero = False
+        except ValueError:
+            if any(np.round(abs(amount), 2) == 0):
+                non_zero = False
         if non_zero:
             idx = self.log['stock_name'].last_valid_index()
             if type(idx) in (int, np.integer, float, np.float16, np.float32, np.float64):
