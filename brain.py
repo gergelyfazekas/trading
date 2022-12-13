@@ -308,7 +308,8 @@ def run_neat(config_file, total_df, num_workers=4, restore_checkpoint_name=None,
         raise ValueError("Invalid num_workers")
 
     # pickle the winner
-    with open("best_genome.pickle", "wb") as f:
+    checkpoint_number = restore_checkpoint_name.split('-')[-1]
+    with open(f"best_genome_{checkpoint_number}.pickle", "wb") as f:
         pickle.dump(winner, f)
 
     return winner, winner_portf
