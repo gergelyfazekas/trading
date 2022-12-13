@@ -17,7 +17,7 @@ START_DATE = datetime.date(1990, 1, 1)
 END_DATE = datetime.date(2020, 1, 1)
 MAX_WORKERS = 20
 LOOK_AHEAD_RANGE = 31
-PLACEHOLDER = 10000
+PLACEHOLDER = 100000
 
 
 class Stock:

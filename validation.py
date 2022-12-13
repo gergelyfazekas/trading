@@ -8,11 +8,11 @@ from portfolio_class import Portfolio
 import random
 
 
-def main():
+def main(best_genome_name):
     with open("validation.pickle", "rb") as f:
         validation = pickle.load(f)
 
-    with open("best_genome.pickle", "rb") as f:
+    with open(best_genome_name, "rb") as f:
         best_genome = pickle.load(f)
 
     # Load configuration.
@@ -59,7 +59,6 @@ def main():
                     for item in portfolio_attributes:
                         df[item] = genome_portfolio.__getattribute__(item)
                 except KeyError:
-                    print("KeyError -- continue")
                     continue
                 output = net.activate(list(df))
                 decision, proportion = brain.output_to_decision(output[0], threshold=threshold)
@@ -98,5 +97,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    best_genome_name = input("best_genome filename: ")
+    main(best_genome_name=best_genome_name)
 
