@@ -46,10 +46,7 @@ class Portfolio:
             self.portfolio_return_hist = []
 
     def __eq__(self, other):
-        if self.genome == other.genome and self.cash_init == other.cash_init and self.exchange == other.exchange:
-            return True
-        else:
-            return False
+        return self.genome == other.genome and self.cash_init == other.cash_init and self.exchange == other.exchange
 
     @property
     def total_portfolio_value(self):

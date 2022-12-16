@@ -8,6 +8,7 @@ import database
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 import tuning
+import inspect
 import math
 from statsmodels.tsa.stattools import adfuller
 import statsmodels.api as sm
@@ -32,26 +33,29 @@ class Stock:
         self.yahoo_pull_start_date = START_DATE
         self.yahoo_pull_end_date = END_DATE
         self.data = pd.DataFrame()
-        # portfolio related attributes
-        self.log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
-                                 'amount': [np.nan] * PLACEHOLDER,
-                                 'price': [np.nan] * PLACEHOLDER,
-                                 'value': [np.nan] * PLACEHOLDER})
-        self.buy_log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
-                                     'amount': [np.nan] * PLACEHOLDER,
-                                     'price': [np.nan] * PLACEHOLDER,
-                                     'value': [np.nan] * PLACEHOLDER})
-        self.sell_log = pd.DataFrame({'date_': [np.nan] * PLACEHOLDER,
-                                      'amount': [np.nan] * PLACEHOLDER,
-                                      'price': [np.nan] * PLACEHOLDER,
-                                      'value': [np.nan] * PLACEHOLDER})
-        self.current_amount = float
-        self.current_value = float
 
         # prevent multiple initialization
-        names = Stock.get_stock_names()
-        if self.name not in names:
+        current_frame = inspect.currentframe()
+        caller_frame = inspect.getouterframes(current_frame, 2)
+        caller_name = caller_frame[1][3]
+        # creating stocks one-by-one with Stock('AAPL')
+        if caller_name != "create_stock_list":
+            if self.name not in self.__class__.get_stock_names():
+                self.__class__.stock_list.append(self)
+                self.__class__.stock_dict[self.name] = self
+            else:
+                raise ValueError(f'{self.name} already in stock_list')
+        # creating stocks with cls.create_stock_list
+        else:
             self.__class__.stock_list.append(self)
+            self.__class__.stock_dict[self.name] = self
+
+    @classmethod
+    def create_stock_list(cls, ticker_list):
+        cls.clear_stock_list()
+        ticker_set = set(ticker_list)
+        for ticker in ticker_set:
+            Stock(name=ticker)
 
     def __str__(self):
         print("Stock:")
@@ -61,11 +65,8 @@ class Stock:
         return f"Stock(name='{self.name}')"
 
     def __eq__(self, other):
-        if self.name == other.name and len(self.data.index) == len(other.data.index) and np.all(
-                self.data.index == other.data.index):
-            return True
-        else:
-            return False
+        return self.name == other.name and len(self.data.index) == len(other.data.index) and np.all(
+                self.data.index == other.data.index)
 
     @classmethod
     def get(cls, ticker):
@@ -79,27 +80,6 @@ class Stock:
         top_tickers = tickers_by_ipo.iloc[0:number, :]
         top_tickers.to_csv(f"tickers_{number}.csv")
         print(f"tickers_{number}.csv was created")
-
-    @classmethod
-    def create_stock_list_from_csv(cls, filename="tickers_30.csv", sep=None):
-        excel_data = pd.read_csv(filename, encoding="latin-1", sep=sep)
-        tickers = excel_data['Symbol'].copy()
-        tickers = tickers.values.tolist()
-        for ticker in tickers:
-            Stock(name=ticker)
-
-    @classmethod
-    def create_stock_list(cls, ticker_list):
-        for ticker in ticker_list:
-            Stock(name=ticker)
-        cls.stock_dict = dict(zip(ticker_list, cls.stock_list))
-
-    @classmethod
-    def print_stock_names(cls):
-        stock_names_lst = []
-        for stock in cls.stock_list:
-            stock_names_lst.append(stock.name)
-        print(stock_names_lst)
 
     @classmethod
     def get_stock_names(cls):
@@ -161,7 +141,6 @@ class Stock:
 
         arguments:
         strategy_dict: key is the name of the strategy, value is a list of parameters to calculate
-        push_back: NOT IMPLEMENTED YET if True push back the extended dataframe to sql
         """
         for stock in cls.stock_list:
             for strategy, params in strategy_dict.items():
@@ -365,50 +344,6 @@ class Stock:
             self.first_date = self.data.index[0]
             self.last_date = self.data.index[-1]
 
-    def calc_variance(self, lookback=None, user_override=None):
-        """calculates variance based on daily returns series
-
-        args:
-        lookback: if None global variance is calc'd for each date,
-                  if int then the global_var and a rolling.var() is calc'd for each date
-        user_override: if not None, this is used instead of user_input to recalculate the global_variance or not
-        """
-        # check if returns exist
-        if 'stock_return' not in self.data.columns:
-            user_input = str(input('stock_return does not exist, want to calculate: y/n'))
-            if user_input.upper() in ['YES', 'Y']:
-                self.calc_return()
-            else:
-                raise InterruptedError('use calc_return before calc_variance')
-
-        # check if variance_global exists
-        if user_override is True:
-            user_input = True
-        elif user_override is False:
-            user_input = False
-        if user_override is None:
-            if 'variance_global' in self.data.columns:
-                user_input = str(input('variance_global already exists, want to recalculate: y/n'))
-
-        # if not in it or user wants to recalculate
-        if 'variance_global' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
-            variance_lst = []
-            for current_date in self.data.index:
-                # ddof=1 to be consistent with the default degrees-of-freedom of pd.rolling.var
-                vari = np.var(self.data.loc[:current_date, 'stock_return'].dropna(), ddof=1)
-                variance_lst.append(vari)
-            self.data['variance_global'] = variance_lst
-
-        # here we have 'variance_global' for sure, so we can use it to replace the first nan entries created by rolling
-        if lookback:
-            if f'variance_{lookback}' in self.data.columns:
-                user_input = str(input(f'variance_{lookback} already exists, want to recalculate: y/n'))
-
-            if f'variance_{lookback}' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
-                self.data[f'variance_{lookback}'] = self.data['stock_return'].rolling(lookback).var()
-                self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
-                                                       self.data['variance_global'], inplace=True)
-
     def set_sector(self):
         if self.data['sector'][0]:
             self.sector = self.data['sector'][0]
@@ -421,56 +356,46 @@ class Stock:
     def set_yahoo_pull_end_date(self, new_date):
         self.yahoo_pull_end_date = new_date
 
-    def calc_return(self):
+    def calc_return(self, mode="log"):
         """calculates daily return"""
-        if 'stock_return' in self.data.columns:
-            user_input = str(input('stock_return already exists, wnat to recalculate: y/n'))
-        if 'stock_return' not in self.data.columns or user_input.upper() in ['YES', 'Y']:
-            tmp_df = pd.DataFrame({'close': self.data['close'], 'lag': self.data['close'].shift()})
-            tmp_df.dropna(inplace=True)
-            tmp_df['stock_return'] = tmp_df['close'] / tmp_df['lag']
+        tmp_df = pd.DataFrame({'close': self.data['close'], 'lag': self.data['close'].shift()})
+        tmp_df.dropna(inplace=True)
+        if mode == "normal":
+            tmp_df['stock_return'] = (tmp_df['close'] / tmp_df['lag']) - 1
             self.data['stock_return'] = tmp_df['stock_return'].copy()
-
-    def labeling_function(self, look_ahead_range=10, method='minmax'):
-        label = []
-
-        if method not in ['minmax', 'max', 'avg']:
-            raise ValueError("Choose a correct method: 'minmax', 'max', 'avg'")
-
-        for close_idx in range(len(self.data['close'])):
-            relative_profits = \
-                self.data['close'].iloc[(close_idx + 1): close_idx + look_ahead_range] / self.data['close'].iloc[
-                    close_idx]
-
-            # minus 1: so that a 4% decrease is not represented as 96% but as -4%
-            # this leads to a plus in the minmax method
-            relative_profits = relative_profits - 1
-
-            if method == 'minmax':
-                if not len(relative_profits) == 0:
-                    label.append(max(relative_profits) + (2 * min(relative_profits)))
-                else:
-                    label.append(np.nan)
-            elif method == 'max':
-                if not len(relative_profits) == 0:
-                    label.append(max(relative_profits))
-                else:
-                    label.append(np.nan)
-            elif method == 'avg':
-                label.append(relative_profits.mean())
-        # padding 
-        if len(label) < len(self.data['close']):
-            diff_length = len(self.data['close']) - len(label)
-            padding = np.array([np.nan] * diff_length)
-            label.append(list(padding))
-
-        if f'label_{method}_{look_ahead_range}' in self.data.columns:
-            user_input = str(
-                input(f'label_{method}_{look_ahead_range} already in {self.name}.data, want to replace: y/n'))
-            if user_input.upper() in ['YES', 'Y']:
-                self.data[f'label_{method}_{look_ahead_range}'] = label
+        elif mode == "log":
+            tmp_df['log_return'] = np.log(tmp_df['close'] / tmp_df['lag'])
+            self.data['log_return'] = tmp_df['stock_return'].copy()
         else:
-            self.data[f'label_{method}_{look_ahead_range}'] = label
+            raise ValueError("mode not recognized in calc_return")
+
+    def calc_variance(self, lookback=None, return_name='log_return'):
+        """calculates variance based on daily returns series
+
+        args:
+        lookback: if None global variance is calc'd for each date,
+                  if int then the global_var and a rolling.var() is calc'd for each date
+        """
+        if return_name not in self.data.columns:
+            raise ValueError('invalid return_name in calc_variance')
+        # !-!-!-!-! LABEL IS NOT THE ACTUAL LABEL FOR THAT DAY !-!-!-!-!
+        # it is just the type of return we want to use
+        # the true label will be self.data[label].shift(-1) when training
+        # this is why we can calculate the rolling window without closed='left' since we already know the return for today
+
+        # global variance calculation
+        variance_lst = []
+        for current_date in self.data.index:
+            # ddof=1 to be consistent with the default degrees-of-freedom of pd.rolling.var
+            vari = np.var(self.data.loc[:current_date, return_name].dropna(), ddof=1)
+            variance_lst.append(vari)
+        self.data['variance_global'] = variance_lst
+
+        # here we have 'variance_global' for sure, so we can use it to replace the first nan entries created by rolling
+        if lookback:
+            self.data[f'variance_{lookback}'] = self.data[return_name].rolling(lookback).var()
+            self.data[f'variance_{lookback}'].mask(self.data[f'variance_{lookback}'].isna(),
+                                                   self.data['variance_global'], inplace=True)
 
     def sma_calc(self, period=20, only_last_date=False):
         """calculates simple moving average with window length=period
@@ -778,27 +703,6 @@ class Stock:
         init_size: the size of the data chunk below which no technical levels are calculated, default = 50
         verbose: print stuff
         """
-        """
-        if 'tech_strong' not in self.data.columns:
-            self.data['tech_strong'] = np.nan
-        else:
-            user_input = str(input(f'{self.name} already has tech_strong. Want to overwrite: y/n'))
-            if user_input.upper() in ['Y', 'YES']:
-                pass
-            else:
-                print(f'None returned for {self.name}')
-                return None
-        if 'tech_medium' not in self.data.columns:
-            self.data['tech_medium'] = np.nan
-        else:
-            user_input = str(input(f'{self.name} already has tech_medium. Want to overwrite: y/n'))
-            if user_input.upper() in ['Y', 'YES']:
-                pass
-            else:
-                print(f'None returned for {self.name}')
-                return None
-                """
-
         for row in range(init_size, len(self.data.index)):
             current_date = self.data.index[row]
             if verbose:

@@ -1,6 +1,4 @@
 import time
-
-import mysql.connector
 import datetime
 import pandas as pd
 from pandas_datareader import data as wb
