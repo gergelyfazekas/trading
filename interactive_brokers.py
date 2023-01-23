@@ -21,16 +21,43 @@ class IBapi(EWrapper, EClient):
         self.error = self.error
         self.data = None
         self.req_id = 0
+        self.done = False
+        self.nextOrderId = None
 
     @staticmethod
-    def error(self, reqId, errorCode, errorString):
+    def error(self, reqId, errorCode, errorString=None):
         if errorCode == 202:
             print('order canceled')
 
     def tickPrice(self, reqId, tickType, price, attrib):
-        print('ticker id: ', reqId, 'tickType: ', TickTypeEnum.to_str(tickType), 'price: ', price)
+        # print('ticker id: ', reqId, 'tickType: ', TickTypeEnum.to_str(tickType), 'price: ', price)
         if tickType == 67 and reqId == self.req_id:
             self.data = price
+
+    def nextValidId(self, orderId):
+        self.nextOrderId = orderId
+        self.trade()
+
+    def trade(self):
+        contract = create_contract('AAPL')
+        order = create_order('BUY', 2, 'LMT', 143)
+        print("placing order")
+        self.placeOrder(self.nextOrderId, contract, order)
+        print("placed order")
+
+    def orderStatus(self, orderId, status, filled,
+                    remaining, avgFillPrice, permId,
+                    parentId, lastFillPrice, clientId,
+                    whyHeld, mktCapPrice):
+        print("OrderStatus. Id:", orderId, "Status:", status, "Filled:", filled,
+              "Remaining:", remaining, "AvgFillPrice:", avgFillPrice)
+
+    def openOrder(self, orderId, contract, order, orderState):
+        print("OpenOrder.", orderId, contract, order, orderState)
+
+    def execDetails(self, reqId, contract, execution):
+        print("Exec details. ", reqId, contract.symbol, contract.secType, contract.currency,
+              execution.execId, execution.orderId, execution.shares)
 
     # def tickSize(self, tickerId, field, size):
     #     print("tickSize", size, tickerId, field)
@@ -48,9 +75,12 @@ class IBapi(EWrapper, EClient):
     def run_loop(self):
         self.run()
 
+    def stop(self):
+        self.done = True
+        self.disconnect()
 
 
-def create_order(direction, quantity, order_type, limit_price=None):
+def create_order(direction, quantity, order_type='MKT', limit_price=0):
     """creates the order object:
     args:
     direction: 'BUY' or 'SELL',
@@ -60,11 +90,26 @@ def create_order(direction, quantity, order_type, limit_price=None):
     """
     # Create order object
     order = Order()
-    order.action = 'BUY'
-    order.totalQuantity = 100000
-    order.orderType = 'LMT'
-    order.lmtPrice = '1.10'
+    order.eTradeOnly = False
+    order.firmQuoteOnly = False
+    order.action = direction
+    order.totalQuantity = quantity
+    order.orderType = order_type
+    order.lmtPrice = limit_price
     return order
+
+def execute_order():
+    app = IBapi()
+    app.nextOrderId = 0
+
+    print("Reconnecting")
+    app.connect('127.0.0.1', 4002, 123)
+
+    # # Start the socket in a thread
+    # api_thread = threading.Thread(target=app.run_loop, daemon=True)
+    # api_thread.start()
+    threading.Timer(3, app.stop).start()
+    app.run_loop()
 
 
 def create_contract(ticker):
@@ -75,6 +120,7 @@ def create_contract(ticker):
         contract.secType = 'STK'
         contract.exchange = 'SMART'
         contract.currency = 'USD'
+        contract.primaryExchange = "NASDAQ"
         return contract
     else:
         raise ValueError(f"ticker must be str and not {type(ticker)}")
@@ -115,11 +161,22 @@ def get_price_interactive_brokers(contract_list):
     return result_dict
 
 
-
 if __name__ == "__main__":
-    tickers = ['AAPL', 'MSFT', 'MSCI']
-    contract_list = create_contract_list(tickers)
-    # contract = create_contract(ticker)
-    price = get_price_interactive_brokers(contract_list)
-    print("Successful query.")
-    print(f"Price: ", price)
+    # tickers = ['AAPL', 'MSFT', 'MSCI']
+    # contract_list = create_contract_list(tickers)
+    #
+    # price = get_price_interactive_brokers(contract_list)
+    # print("Successful query.")
+    # print(f"Price: ", price)
+    #
+    # print("Sleeping 2 secs")
+    # time.sleep(2)
+    # print("Awake")
+
+    execute_order()
+
+
+
+
+
+
