@@ -23,6 +23,8 @@ class IBapi(EWrapper, EClient):
         self.req_id = 0
         self.done = False
         self.nextOrderId = None
+        self.order = None
+        self.contract = None
 
     @staticmethod
     def error(self, reqId, errorCode, errorString=None):
@@ -39,11 +41,12 @@ class IBapi(EWrapper, EClient):
         self.trade()
 
     def trade(self):
-        contract = create_contract('AAPL')
-        order = create_order('BUY', 2, 'LMT', 143)
-        print("placing order")
-        self.placeOrder(self.nextOrderId, contract, order)
-        print("placed order")
+        if self.order and self.contract:
+            print("placing order")
+            self.placeOrder(self.nextOrderId, self.contract, self.order)
+            print("placed order")
+        else:
+            pass
 
     def orderStatus(self, orderId, status, filled,
                     remaining, avgFillPrice, permId,
@@ -98,10 +101,11 @@ def create_order(direction, quantity, order_type='MKT', limit_price=0):
     order.lmtPrice = limit_price
     return order
 
-def execute_order():
+def execute_order(contract, order):
     app = IBapi()
     app.nextOrderId = 0
-
+    app.contract = contract
+    app.order = order
     print("Reconnecting")
     app.connect('127.0.0.1', 4002, 123)
 
@@ -162,18 +166,18 @@ def get_price_interactive_brokers(contract_list):
 
 
 if __name__ == "__main__":
-    # tickers = ['AAPL', 'MSFT', 'MSCI']
-    # contract_list = create_contract_list(tickers)
-    #
-    # price = get_price_interactive_brokers(contract_list)
-    # print("Successful query.")
-    # print(f"Price: ", price)
-    #
-    # print("Sleeping 2 secs")
-    # time.sleep(2)
-    # print("Awake")
+    tickers = ['AAPL', 'MSFT', 'MSCI']
+    contract_list = create_contract_list(tickers)
 
-    execute_order()
+    # Query the current prices
+    price = get_price_interactive_brokers(contract_list)
+    print("Successful query.")
+    print(f"Price: ", price)
+
+    # Execute an order
+    # contract = create_contract('AAPL')
+    # order = create_order('SELL', 1, 'LMT', 141)
+    # execute_order(contract, order)
 
 
 
